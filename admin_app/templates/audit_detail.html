@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}会话详情{% endblock %}
+{% block page_title %}会话 {{ session.id }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <h2>会话信息</h2>
+    <a class="btn btn-ghost btn-sm" href="/admin/audit">返回列表</a>
+  </div>
+  <div class="meta-grid">
+    <div class="meta-item"><div class="k">员工ID</div><div class="v">{{ session.user_id }}</div></div>
+    <div class="meta-item"><div class="k">线路</div><div class="v">{{ session.lane_scope }}</div></div>
+    <div class="meta-item"><div class="k">运单号</div><div class="v">{{ session.shipment_no or '-' }}</div></div>
+    <div class="meta-item"><div class="k">会话状态</div><div class="v">{{ session.status }}</div></div>
+    <div class="meta-item"><div class="k">开始时间</div><div class="v">{{ session.created_at|fmt_dt }}</div></div>
+    <div class="meta-item"><div class="k">最后活动</div><div class="v">{{ session.last_active_at|fmt_dt }}</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>消息记录</h2>
+  <div class="chat">
+    {% for m in items %}
+    <div class="message {{ m.role }}">
+      <div class="message-head">
+        <span class="badge {{ 'badge-approved' if m.role == 'user' else 'badge-active' }}">{{ '员工' if m.role == 'user' else '助手' }}</span>
+        {% if m.status == 'takeover' %}<span class="badge badge-takeover">已接管</span>{% endif %}
+        {% if m.intent %}<span class="muted">{{ m.intent }}</span>{% endif %}
+        {% if m.model %}<span class="muted">模型 {{ m.model }}</span>{% endif %}
+        {% if m.latency_ms %}<span class="muted">{{ m.latency_ms }} ms</span>{% endif %}
+        <span class="muted" style="margin-left:auto;">{{ m.created_at|fmt_dt }}</span>
+      </div>
+
+      <div class="message-body">{{ m.content }}</div>
+
+      {% if m.citations %}
+      <div class="citations">
+        {% for c in m.citations %}
+        <div class="citation">
+          <b>{{ c.doc_title }}</b> · v{{ c.doc_version }} · {{ c.section }}
+          <div class="muted">{{ c.quote }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if m.flags %}
+      <div class="tags">
+        {% for f in m.flags %}
+        <span class="tag">{{ flag_text(f.flag_type) }}{% if f.revoked_at %}（已撤销）{% endif %}</span>
+        {% endfor %}
+      </div>
+      {% for f in m.flags %}
+        {% if not f.revoked_at %}
+        <div class="message-flag">
+          <div class="muted">标记人 {{ f.flagged_name or f.flagged_by }} · {{ f.reason }}</div>
+          {% if can('audit:mark') %}
+          <form method="post" action="/admin/audit/flags/{{ f.id }}/revoke">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="session_id" value="{{ session.id }}">
+            <input type="text" name="reason" placeholder="撤销理由（至少 5 字）" required>
+            <button class="btn btn-ghost btn-sm" type="submit">撤销标记</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+      {% endif %}
+
+      {% if can('audit:mark') %}
+      <details class="message-flag">
+        <summary class="muted" style="cursor:pointer;">标记此消息</summary>
+        <form method="post" action="/admin/audit/{{ session.id }}/flags">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="message_id" value="{{ m.id }}">
+          <select name="flag_type" required>
+            <option value="">选择标记类型</option>
+            {% for key, name in flag_types.items() %}
+            <option value="{{ key }}">{{ name }}</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="reason" placeholder="原因说明（至少 5 字）" required>
+          <button class="btn btn-primary btn-sm" type="submit">记录标记</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="muted">该会话没有消息。</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 · 运输异常协作后台</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-brand">
+      <span class="brand-mark brand-mark-lg">运</span>
+      <h1>运输异常与签收协作</h1>
+      <p class="muted">管理后台 · 试点干线（华东）</p>
+    </div>
+
+    <form class="card login-card" method="post" action="/admin/login">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <h2>登录</h2>
+      {% if err %}<div class="alert alert-err">{{ err }}</div>{% endif %}
+      {% if ok %}<div class="alert alert-ok">{{ ok }}</div>{% endif %}
+
+      <label class="field">
+        <span>账号</span>
+        <input type="text" name="employee_no" autocomplete="username" placeholder="例如 rule_admin" required autofocus>
+      </label>
+      <label class="field">
+        <span>密码</span>
+        <input type="password" name="password" autocomplete="current-password" placeholder="至少 12 位" required>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">登录后台</button>
+      <p class="login-hint">连续 5 次失败将锁定 15 分钟。演示密码：Admin@123456789</p>
+    </form>
+
+    <div class="login-demo">
+      <span>rule_admin 规则管理员</span>
+      <span>supervisor 批准</span>
+      <span>supervisor2 发布</span>
+      <span>auditor 审计</span>
+      <span>sys_admin 系统</span>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}规则详情{% endblock %}
+{% block page_title %}{{ doc.title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <span class="badge badge-{{ doc.status }}">{{ status_text(doc.status) }}</span>
+      <span class="muted" style="margin-left:8px;">{{ doc.id }}</span>
+    </div>
+    <div class="inline-actions">
+      <a class="btn btn-ghost btn-sm" href="/admin/kb">返回列表</a>
+      {% if versions|length > 1 %}
+      <a class="btn btn-ghost btn-sm" href="/admin/kb/{{ doc.id }}/diff">版本对比</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-item"><div class="k">适用线路</div><div class="v">{{ doc.lane_scope }}</div></div>
+    <div class="meta-item"><div class="k">当前版本</div><div class="v">v{{ doc.current_version }}</div></div>
+    <div class="meta-item"><div class="k">生效版本</div><div class="v">{{ ('v' ~ doc.active_version) if doc.active_version else '未生效' }}</div></div>
+    <div class="meta-item"><div class="k">生效日期</div><div class="v">{{ doc.effective_from or '-' }}</div></div>
+    <div class="meta-item"><div class="k">当前版本切片</div><div class="v">{{ chunks|length }}</div></div>
+    <div class="meta-item"><div class="k">生效中切片</div><div class="v">{{ active_chunks }}</div></div>
+    <div class="meta-item"><div class="k">提交人</div><div class="v">{{ submitter_name }}</div></div>
+    <div class="meta-item"><div class="k">批准人</div><div class="v">{{ approver_name }}</div></div>
+    <div class="meta-item"><div class="k">自动脱敏</div><div class="v">{{ doc.pii_masked }} 处</div></div>
+    <div class="meta-item"><div class="k">更新时间</div><div class="v">{{ doc.updated_at|fmt_dt }}</div></div>
+  </div>
+
+  <div class="form-actions" style="margin-top:14px;">
+    {% if doc.status == 'draft' and can('kb:submit') %}
+    <form method="post" action="/admin/kb/{{ doc.id }}/submit-review">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-primary" type="submit">提交审核</button>
+    </form>
+    {% endif %}
+
+    {% if doc.status == 'pending' and can('kb:approve') %}
+    <form method="post" action="/admin/kb/{{ doc.id }}/approve">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-primary" type="submit">批准版本</button>
+    </form>
+    {% endif %}
+
+    {% if doc.status == 'approved' and can('kb:publish') %}
+    <form method="post" action="/admin/kb/{{ doc.id }}/publish"
+          onsubmit="return confirm('发布后将立即切换到新版本并影响问答，确认发布？');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-primary" type="submit">发布并切换检索</button>
+    </form>
+    {% endif %}
+
+    {% if doc.status == 'active' and can('kb:offline') %}
+    <form method="post" action="/admin/kb/{{ doc.id }}/offline"
+          onsubmit="return confirm('下线后该规则不再参与检索，历史版本仍保留，确认下线？');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-danger" type="submit">下线规则</button>
+    </form>
+    {% endif %}
+
+    {% if doc.status == 'draft' and not doc.active_version and can('kb:edit') %}
+    <form method="post" action="/admin/kb/{{ doc.id }}/delete"
+          onsubmit="return confirm('删除草稿不可恢复，确认删除？');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-danger" type="submit">删除草稿</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if doc.status == 'pending' %}
+  <div class="alert alert-ok" style="margin-top:14px;">已提交审核，草稿已锁定。需由提交人之外的主管批准。</div>
+  {% elif doc.status == 'approved' %}
+  <div class="alert alert-ok" style="margin-top:14px;">已批准，需由批准人之外的另一位主管发布。</div>
+  {% endif %}
+</div>
+
+{% if conflicts %}
+<div class="card">
+  <h2>与生效版本的疑似冲突</h2>
+  <p class="role-note">同章节文本差异较大，系统不做自动合并，请人工确认后再提交。</p>
+  {% for c in conflicts %}
+  <div class="conflict">
+    <strong>{{ c.section }}</strong> · 相似度 {{ c.ratio }}
+    <div style="margin-top:6px;">旧：{{ c.old }}</div>
+    <div>新：{{ c.new }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="section-head">
+    <h2>切片预览（v{{ doc.current_version }}）</h2>
+    <span class="muted">500 字 / 重叠 80</span>
+  </div>
+
+  {% for c in chunks %}
+  <div class="chunk">
+    <div class="chunk-head">
+      <span class="chunk-section">{{ c.section }}</span>
+      <span class="muted">#{{ c.chunk_no }} · {{ c.token_count }} 字</span>
+    </div>
+    <div class="chunk-text">{{ c.text }}</div>
+    {% if doc.status == 'draft' and can('kb:edit') %}
+    <details class="editor">
+      <summary>编辑此切片</summary>
+      <form method="post" action="/admin/kb/{{ doc.id }}/chunks/{{ c.id }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <textarea name="text" class="field" style="width:100%;min-height:120px;">{{ c.text }}</textarea>
+        <div class="form-actions"><button class="btn btn-ghost btn-sm" type="submit">保存切片</button></div>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="muted">当前版本没有切片。</p>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2>版本记录</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>版本</th><th>说明</th><th>内容哈希</th><th>发布时间</th><th>发布人</th></tr></thead>
+      <tbody>
+        {% for v in versions %}
+        <tr>
+          <td>v{{ v.version }}</td>
+          <td>{{ v.change_note }}</td>
+          <td class="muted">{{ v.content_hash[:10] }}</td>
+          <td>{{ v.published_at|fmt_dt }}</td>
+          <td>{{ v.published_by or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">暂无版本记录。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

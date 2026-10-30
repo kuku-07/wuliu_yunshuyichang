@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}上传规则{% endblock %}
+{% block page_title %}上传规则文档{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>上传并生成草稿</h2>
+      <p class="role-note">支持 Markdown 与带文字层的 PDF；扫描件请先 OCR。上传后不会立即生效。</p>
+    </div>
+    <a class="btn btn-ghost" href="/admin/kb">返回列表</a>
+  </div>
+
+  <form method="post" action="/admin/kb/upload" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="form-grid">
+      <label class="field">
+        <span>文档标题</span>
+        <input type="text" name="title" placeholder="例如：运输异常处置与签收协作规则 v0.2" required>
+      </label>
+      <label class="field">
+        <span>适用线路</span>
+        <input type="text" name="lane_scope" value="试点干线-华东" required>
+      </label>
+      <label class="field">
+        <span>生效日期（可选）</span>
+        <input type="date" name="effective_from" value="{{ today }}">
+      </label>
+      <label class="field">
+        <span>规则文件（.md / .pdf，≤20MB）</span>
+        <input type="file" name="file" accept=".md,.pdf" required>
+      </label>
+    </div>
+
+    <div class="alert alert-ok" style="margin-top:6px;">
+      解析后会按 500 字、80 字重叠切片，并自动脱敏手机号、身份证与车牌。切片内容可在详情页逐条编辑。
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">上传并生成草稿</button>
+      <span class="muted">上传后状态为「草稿」，需提交审核并由另一位主管批准、发布。</span>
+    </div>
+  </form>
+</div>
+{% endblock %}

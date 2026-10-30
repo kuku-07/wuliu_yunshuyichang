@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}提示词模板{% endblock %}
+{% block page_title %}提示词模板{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>锁定安全段（不可编辑）</h2>
+      <p class="role-note">该段在数据库字段层受保护，任何修改都会被接口拒绝。哈希 {{ locked_hash_now[:12] }}</p>
+    </div>
+    <span class="badge badge-active">受控</span>
+  </div>
+  <pre class="locked">{{ template.locked_section }}</pre>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>可编辑话术段</h2>
+      {% if draft %}
+      <p class="role-note">当前草稿 v{{ draft.version }} · 创建人 {{ draft.created_by }} · 试跑状态
+        {{ '已试跑' if draft.dry_run_at else '未试跑' }}</p>
+      {% else %}
+      <p class="role-note">当前生效 v{{ template.active_version }}，修改后保存为草稿，不影响线上。</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" action="/admin/prompts/{{ template.id }}/draft">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field">
+      <span>话术与输出结构</span>
+      <textarea name="editable_section" {% if not can('prompt:edit') %}disabled{% endif %}>{{ draft.editable_section if draft else template.editable_section }}</textarea>
+    </label>
+    <div class="form-actions">
+      {% if can('prompt:edit') %}
+      <button class="btn btn-primary" type="submit">保存为草稿</button>
+      {% endif %}
+      <span class="muted">禁用表述：忽略以上 / 无需引用 / 直接发给客户 / 可以赔付 / 自行承诺。</span>
+    </div>
+  </form>
+
+  <div class="inline-actions" style="margin-top:14px;">
+    {% if can('prompt:edit') %}
+    <form method="post" action="/admin/prompts/{{ template.id }}/validate">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-ghost" type="submit">结构校验</button>
+    </form>
+    <form method="post" action="/admin/prompts/{{ template.id }}/dry-run">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-ghost" type="submit">运行 20 条试跑</button>
+    </form>
+    {% endif %}
+    {% if can('prompt:publish') and draft %}
+    <form method="post" action="/admin/prompts/{{ template.id }}/publish"
+          onsubmit="return confirm('发布后立即对问答生效，确认发布？');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-primary" type="submit">发布草稿 v{{ draft.version }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if result %}
+<div class="card">
+  <div class="section-head">
+    <h2>试跑结果</h2>
+    <span class="badge {{ 'badge-active' if result.passed == result.total and not result.structure_errors else 'badge-pending' }}">
+      {{ result.passed }} / {{ result.total }}
+    </span>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-item"><div class="k">红线拦截</div><div class="v">{{ result.redline_blocked }} / {{ result.redline_total }}</div></div>
+    <div class="meta-item"><div class="k">规则命中</div><div class="v">{{ result.normal_hit }} / {{ result.normal_total }}</div></div>
+    <div class="meta-item"><div class="k">结构错误</div><div class="v">{{ result.structure_errors|length }} 项</div></div>
+    <div class="meta-item"><div class="k">试跑时间</div><div class="v">{{ result.at|fmt_dt }}</div></div>
+  </div>
+
+  {% if result.structure_errors %}
+  <div class="alert alert-err" style="margin-top:12px;">{{ result.structure_errors|join('；') }}</div>
+  {% endif %}
+
+  <details style="margin-top:12px;">
+    <summary class="muted" style="cursor:pointer;">查看 20 条明细</summary>
+    <div class="table-wrap" style="margin-top:10px;">
+      <table class="table">
+        <thead><tr><th>类型</th><th>问题</th><th>结果</th><th>说明</th></tr></thead>
+        <tbody>
+          {% for row in result.details %}
+          <tr>
+            <td>{{ '红线' if row.kind == 'redline' else '普通' }}</td>
+            <td>{{ row.question }}</td>
+            <td>
+              {% if row.result in ['拦截','命中'] %}<span class="badge badge-active">{{ row.result }}</span>
+              {% else %}<span class="badge badge-offline">{{ row.result }}</span>{% endif %}
+            </td>
+            <td class="muted">{{ row.note }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>版本历史</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>版本</th><th>状态</th><th>试跑</th><th>创建人</th><th>发布时间</th><th></th></tr></thead>
+      <tbody>
+        {% for v in versions %}
+        <tr>
+          <td>v{{ v.version }} {% if v.version == template.active_version %}<span class="badge badge-active">生效中</span>{% endif %}</td>
+          <td>{{ v.status }}</td>
+          <td>{{ '通过' if v.dry_run_result else '未试跑' }}</td>
+          <td>{{ v.created_by or '-' }}</td>
+          <td>{{ v.published_at if v.published_at else (v.created_at|fmt_dt) }}</td>
+          <td>
+            {% if v.version != template.active_version and can('prompt:publish') %}
+            <form method="post" action="/admin/prompts/{{ template.id }}/rollback"
+                  onsubmit="return confirm('回滚后将立即生效，确认回滚到 v{{ v.version }}？');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="version" value="{{ v.version }}">
+              <button class="btn btn-ghost btn-sm" type="submit">回滚</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">暂无版本。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}发布记录{% endblock %}
+{% block page_title %}发布记录{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>规则与提示词发布流水</h2>
+      <p class="role-note">只读流水，记录谁在何时改了什么；审计日志不可更新或删除。</p>
+    </div>
+  </div>
+
+  {% set action_names = {
+    'kb_submit': '提交审核',
+    'kb_approve': '批准规则',
+    'kb_publish': '发布规则',
+    'kb_offline': '下线规则',
+    'prompt_publish': '发布提示词',
+    'prompt_rollback': '回滚提示词',
+    'index_rebuild': '重建索引'
+  } %}
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>说明</th><th>请求编号</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="muted">{{ r.created_at|fmt_dt }}</td>
+          <td>{{ r.actor_name or '-' }}</td>
+          <td><span class="badge badge-approved">{{ action_names.get(r.action, r.action) }}</span></td>
+          <td class="muted">{{ r.object_type }} / {{ r.object_id }}</td>
+          <td>{{ r.detail }}</td>
+          <td class="muted">{{ r.request_id }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">暂无发布记录。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

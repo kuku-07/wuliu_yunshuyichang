@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}管理后台{% endblock %} · 运输异常协作</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">运</span>
+      <div>
+        <div class="brand-title">异常协作后台</div>
+        <div class="brand-sub">试点干线 · 华东</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-label">规则与问答</div>
+      <a class="nav-item {% if request.url.path.startswith('/admin/kb') %}active{% endif %}" href="/admin/kb">规则知识库</a>
+      <a class="nav-item {% if request.url.path.startswith('/admin/prompts') %}active{% endif %}" href="/admin/prompts">提示词模板</a>
+      <div class="nav-label">监督与追溯</div>
+      <a class="nav-item {% if request.url.path.startswith('/admin/audit') %}active{% endif %}" href="/admin/audit">对话审计</a>
+      <a class="nav-item {% if request.url.path.startswith('/admin/releases') %}active{% endif %}" href="/admin/releases">发布记录</a>
+    </nav>
+
+    <div class="sidebar-user">
+      <div class="avatar">{{ user.name[0] if user else '?' }}</div>
+      <div class="sidebar-user-info">
+        <div class="sidebar-user-name">{{ user.name if user else '未登录' }}</div>
+        <div class="sidebar-user-role">{{ user.role_name if user else '' }}</div>
+      </div>
+      {% if user %}
+      <form method="post" action="/admin/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost btn-sm" type="submit">退出</button>
+      </form>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <h1 class="page-title">{% block page_title %}管理后台{% endblock %}</h1>
+      <div class="topbar-right">
+        <span class="muted">请求 {{ request_id }}</span>
+        <span class="role-pill">{{ user.role_name if user else '访客' }}</span>
+      </div>
+    </header>
+
+    {% if ok %}<div class="alert alert-ok">{{ ok }}</div>{% endif %}
+    {% if err %}<div class="alert alert-err">{{ err }}</div>{% endif %}
+
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+</body>
+</html>
