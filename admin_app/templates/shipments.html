@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}运单登记{% endblock %}
+{% block page_title %}运单登记{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>运单主数据</h2>
+      <p class="role-note">
+        对话入口靠「运单 → 线路」做授权预检；这里的线路改了，该运单的授权线路会跟着改。
+      </p>
+    </div>
+    <a class="btn btn-primary" href="/admin/shipments?edit=">登记运单</a>
+  </div>
+
+  <form class="filters" method="get" action="/admin/shipments">
+    <label>状态
+      <select name="status">
+        <option value="">全部</option>
+        {% for code, text in status_options %}
+        <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ text }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>关键词
+      <input type="text" name="keyword" value="{{ keyword }}" placeholder="运单号 / 客户 / 线路">
+    </label>
+    <button class="btn btn-ghost" type="submit">筛选</button>
+  </form>
+
+  <div class="table-wrap" style="margin-top:16px;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>运单号</th><th>线路</th><th>客户</th><th>状态</th>
+          <th>生效授权</th><th>来源</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in shipments %}
+        <tr>
+          <td class="mono">{{ s.shipment_no }}</td>
+          <td>{{ s.lane_scope }}</td>
+          <td class="muted">{{ s.customer or '-' }}</td>
+          <td>
+            {% if s.status == 'in_transit' %}<span class="badge badge-approved">在途</span>
+            {% elif s.status == 'delivered' %}<span class="badge badge-active">已签收</span>
+            {% elif s.status == 'exception' %}<span class="badge badge-pending">异常</span>
+            {% else %}<span class="badge badge-offline">已取消</span>{% endif %}
+          </td>
+          <td class="num">{{ s.active_grants }}</td>
+          <td>{% if s.is_demo %}<span class="badge badge-draft">演示</span>{% else %}<span class="muted small">登记</span>{% endif %}</td>
+          <td class="row-actions">
+            <a class="btn btn-ghost btn-sm" href="/admin/shipments?edit={{ s.shipment_no }}">编辑</a>
+            <form method="post" action="/admin/shipments/{{ s.shipment_no }}/delete" class="inline-form"
+                  onsubmit="return confirm('删除运单 {{ s.shipment_no }}？撤销状态的授权会一起删掉。');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn btn-danger btn-sm" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">暂无运单，点击右上角「登记运单」新建。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{% if editing %}编辑 {{ editing.shipment_no }}{% else %}登记新运单{% endif %}</h2>
+  <form method="post" action="/admin/shipments/save" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="original_no" value="{{ editing.shipment_no if editing else '' }}">
+    <label>运单号
+      <input type="text" name="shipment_no" required maxlength="40"
+             value="{{ editing.shipment_no if editing else '' }}"
+             {% if editing %}readonly{% endif %}
+             placeholder="YD + 11 位数字，例如 YD20261030001">
+    </label>
+    <label>线路
+      <select name="lane_scope" required>
+        {% for lane in lanes %}
+        <option value="{{ lane }}" {% if editing and editing.lane_scope == lane %}selected{% endif %}>{{ lane }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>客户
+      <input type="text" name="customer" maxlength="100"
+             value="{{ editing.customer if editing else '' }}"
+             placeholder="例如：杭州 · 某家电客户">
+    </label>
+    <label>状态
+      <select name="status">
+        {% for code, text in status_options %}
+        <option value="{{ code }}"
+          {% if (editing and editing.status == code) or (not editing and code == 'in_transit') %}selected{% endif %}>{{ text }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">保存</button>
+      {% if editing %}
+      <a class="btn btn-ghost" href="/admin/shipments">取消编辑</a>
+      {% endif %}
+    </div>
+  </form>
+  <p class="role-note">运单号登记后不可修改（改号会打断已有授权），需要换号请删除后重新登记。</p>
+</div>
+
+<div class="card">
+  <h2>演示数据</h2>
+  <p class="role-note">
+    当前演示运单 {{ demo.shipments }} 条、演示授权 {{ demo.grants }} 条。
+    清除会连同「指向这些运单的自建授权」一起删掉，之后重启不会自动回填；
+    恢复只补回缺失的演示行，不覆盖你自建的数据。
+  </p>
+  <div class="form-actions" style="margin-top:12px;">
+    <form method="post" action="/admin/shipments/purge-demo" class="inline-form"
+          onsubmit="return confirm('清除全部演示运单与演示授权？');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-danger" type="submit" {% if not demo.shipments and not demo.grants %}disabled{% endif %}>
+        清除演示数据
+      </button>
+    </form>
+    <form method="post" action="/admin/shipments/restore-demo" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-ghost" type="submit">恢复演示数据</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

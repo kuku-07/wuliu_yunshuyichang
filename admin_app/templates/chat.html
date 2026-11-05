@@ -11,6 +11,7 @@
   <div class="chat-head">
     <div class="chat-head-left">
       <span class="chat-lane">线路 · {{ lanes[0] }}</span>
+      <span class="ship-chip" id="ship-chip" hidden></span>
       <label class="ship-field">
         <span>运单</span>
         <input type="text" id="shipment" placeholder="可选，填了就校验授权" maxlength="40"
@@ -89,6 +90,7 @@
   var CSRF = shell.dataset.csrf;
   var MAX = parseInt(shell.dataset.max, 10) || 2000;
   var shipInput = document.getElementById("shipment");
+  var shipChip = document.getElementById("ship-chip");
 
   var busy = false;
   var raf = null;
@@ -248,6 +250,13 @@
     switch (ev) {
       case "meta":
         current.meta = data;
+        if (data && data.shipment) {
+          var s = data.shipment;
+          shipChip.textContent = s.shipment_no + " · " + s.lane_scope +
+            (s.customer ? " · " + s.customer : "") +
+            (s.status_text ? " · " + s.status_text : "");
+          shipChip.hidden = false;
+        }
         break;
       case "status":
         if (data.stage === "retrieving") { setState("检索中"); }
@@ -317,6 +326,7 @@
         var payload = {};
         try { payload = await resp.json(); } catch (e) {}
         if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+        if (shipChip) shipChip.hidden = true;
         onError(payload);
         setState("出错");
         finish();

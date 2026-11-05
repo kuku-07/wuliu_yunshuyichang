@@ -109,6 +109,7 @@ def chat_stream(
 
     # ---- 运单级授权预检：必须在流开始前，未授权不检索、不调模型 ----
     shipment = ""
+    shipment_info = None
     if (shipment_no or "").strip():
         shipment, format_error = grant_service.validate_format(shipment_no)
         if format_error:
@@ -122,6 +123,8 @@ def chat_stream(
                 session_lane=session.get("lane_scope") or "",
             )
             grant_service.record_check(conn, user, shipment, allowed, reason, request_id)
+            if allowed:
+                shipment_info = grant_service.get_shipment(conn, shipment)
         finally:
             conn.close()
         if not allowed:
@@ -137,7 +140,8 @@ def chat_stream(
     def event_stream():
         try:
             for event, data in chat_service.stream_turn(
-                connect, user, session, text, request_id, shipment_no=shipment
+                connect, user, session, text, request_id, shipment_no=shipment,
+                shipment_info=shipment_info,
             ):
                 yield _sse(event, data)
         finally:

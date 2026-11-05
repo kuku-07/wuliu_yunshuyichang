@@ -432,3 +432,14 @@ pre.locked {
   outline: none;
 }
 .ship-field input:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(79, 70, 229, .08); }
+
+/* ---------- 运单登记 / 运单上下文 ---------- */
+.row-actions { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.ship-chip {
+  background: var(--blue-soft);
+  color: var(--blue);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}

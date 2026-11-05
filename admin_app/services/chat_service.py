@@ -115,6 +115,41 @@ def recent_history(conn: sqlite3.Connection, session_id: str, pairs: int = HISTO
     return [dict(r) for r in reversed(rows)]
 
 
+def _shipment_payload(info: dict | None) -> dict | None:
+    """给前端的运单上下文（已授权才会走到这里）。"""
+    if not info:
+        return None
+    from .shipments import status_text
+
+    return {
+        "shipment_no": info.get("shipment_no", ""),
+        "lane_scope": info.get("lane_scope", ""),
+        "customer": info.get("customer", ""),
+        "status": info.get("status", ""),
+        "status_text": status_text(info.get("status", "")),
+    }
+
+
+def _shipment_context(info: dict | None) -> str:
+    """拼进提示词的运单上下文。
+
+    只放「已登记的客观字段」，并明确禁止由这些字段推断未记录的信息——
+    否则模型很容易从「客户是谁」推出一堆规则里没有的结论。
+    """
+    if not info:
+        return ""
+    from .shipments import status_text
+
+    return (
+        "【运单上下文】\n"
+        f"运单号 {info.get('shipment_no', '')}，线路 {info.get('lane_scope', '')}，"
+        f"客户 {info.get('customer') or '未登记'}，"
+        f"状态 {status_text(info.get('status', ''))}。\n"
+        "以上只是系统里已登记的客观字段，不得据此推断订单金额、责任方或任何未记录的信息；"
+        "涉及赔付与判责仍按红线接管。"
+    )
+
+
 def _history_block(history: list[dict]) -> str:
     if not history:
         return ""
@@ -274,6 +309,7 @@ def stream_turn(
     question: str,
     request_id: str,
     shipment_no: str = "",
+    shipment_info: dict | None = None,
 ) -> Iterator[tuple[str, dict]]:
     """生成 SSE 事件序列。产出 (event, data) 二元组。
 
@@ -306,7 +342,8 @@ def stream_turn(
         conn.commit()
 
         yield ("meta", {"request_id": request_id, "session_id": session_id,
-                        "user_message_id": user_msg_id})
+                        "user_message_id": user_msg_id,
+                        "shipment": _shipment_payload(shipment_info)})
         yield ("status", {"stage": "retrieving", "label": "正在检索规则…"})
 
         # ---- 1. 红线闸门：命中就绝不调用模型 ----
@@ -363,6 +400,9 @@ def stream_turn(
         history_block = _history_block(history)
         if history_block:
             user_prompt = f"{user_prompt}\n\n{history_block}"
+        shipment_block = _shipment_context(shipment_info)
+        if shipment_block:
+            user_prompt = f"{user_prompt}\n\n{shipment_block}"
 
         assistant_id = _insert_message(
             conn, session_id, "assistant", "", status="streaming",

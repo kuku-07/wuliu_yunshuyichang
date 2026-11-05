@@ -167,7 +167,13 @@ CREATE TABLE IF NOT EXISTS shipments (
     lane_scope   TEXT NOT NULL,
     customer     TEXT NOT NULL DEFAULT '',
     status       TEXT NOT NULL DEFAULT 'in_transit',
+    is_demo      INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS authorization_grants (
@@ -182,6 +188,7 @@ CREATE TABLE IF NOT EXISTS authorization_grants (
     revoked_at   TEXT,
     revoked_by   TEXT,
     reason       TEXT NOT NULL DEFAULT '',
+    is_demo      INTEGER NOT NULL DEFAULT 0,
     UNIQUE(user_id, shipment_no)
 );
 
@@ -230,16 +237,64 @@ def init_db() -> None:
     conn = connect()
     try:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.execute(
             "INSERT OR IGNORE INTO kb_index_state (id, active_chunks) VALUES (1, 0)"
         )
         if conn.execute("SELECT COUNT(*) FROM admin_users").fetchone()[0] == 0:
             _seed(conn)
+            set_meta(conn, DEMO_SEED_KEY, "seeded")
         else:
             _backfill_demo_data(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+DEMO_SEED_KEY = "demo_seed_state"
+
+
+def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
+    row = conn.execute("SELECT value FROM app_meta WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute(
+        "INSERT INTO app_meta (key, value) VALUES (?, ?)"
+        " ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, value),
+    )
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """老库补列，并给「本来就存在的」演示行补上 is_demo 标记。
+
+    标记用的是已知编号，而不是 `LIKE 'g_00%'` 这种前缀猜测——
+    自建授权的 id 是 `g_` + 随机 hex，理论上可能撞上前缀，不能误标。
+    """
+    for table, column, ddl in (
+        ("shipments", "is_demo",
+         "ALTER TABLE shipments ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"),
+        ("authorization_grants", "is_demo",
+         "ALTER TABLE authorization_grants ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"),
+    ):
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            conn.execute(ddl)
+
+    if DEMO_SHIPMENTS:
+        marks = ",".join("?" * len(DEMO_SHIPMENTS))
+        conn.execute(
+            f"UPDATE shipments SET is_demo=1 WHERE shipment_no IN ({marks})",
+            tuple(item[0] for item in DEMO_SHIPMENTS),
+        )
+    if DEMO_GRANTS:
+        marks = ",".join("?" * len(DEMO_GRANTS))
+        conn.execute(
+            f"UPDATE authorization_grants SET is_demo=1 WHERE id IN ({marks})",
+            tuple(item[0] for item in DEMO_GRANTS),
+        )
 
 
 def _seed(conn: sqlite3.Connection) -> None:
@@ -376,12 +431,19 @@ def _seed(conn: sqlite3.Connection) -> None:
 
 
 def _backfill_demo_data(conn: sqlite3.Connection) -> None:
-    """老库升级：缺运单主数据 / 授权时补齐，已有数据一律不动。"""
+    """老库升级：只在「从未标记过演示数据」时补一次。
+
+    管理员手动清掉演示数据后 `demo_seed_state='purged'`，重启不会再塞回来，
+    否则「删除」就形同虚设。
+    """
+    if get_meta(conn, DEMO_SEED_KEY):
+        return
     created = now_iso()
     if conn.execute("SELECT COUNT(*) FROM shipments").fetchone()[0] == 0:
         _seed_shipments(conn, created)
     if conn.execute("SELECT COUNT(*) FROM authorization_grants").fetchone()[0] == 0:
         _seed_grants(conn, created)
+    set_meta(conn, DEMO_SEED_KEY, "seeded")
 
 
 # ---------------------------------------------------------------------------
@@ -400,8 +462,8 @@ def _seed_shipments(conn: sqlite3.Connection, created: str) -> None:
     for shipment, lane, customer, status in DEMO_SHIPMENTS:
         conn.execute(
             "INSERT OR IGNORE INTO shipments"
-            " (shipment_no, lane_scope, customer, status, created_at)"
-            " VALUES (?,?,?,?,?)",
+            " (shipment_no, lane_scope, customer, status, is_demo, created_at)"
+            " VALUES (?,?,?,?,1,?)",
             (shipment, lane, customer, status, created),
         )
 
@@ -435,8 +497,8 @@ def _seed_grants(conn: sqlite3.Connection, created: str) -> None:
         conn.execute(
             "INSERT OR IGNORE INTO authorization_grants"
             " (id, user_id, shipment_no, lane_scope, status, granted_by, granted_at,"
-            "  expires_at, revoked_at, reason)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "  expires_at, revoked_at, reason, is_demo)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,1)",
             (gid, uid, shipment, lane_by_shipment.get(shipment, ""), status, granted_by,
              created, expires_at, revoked_at, reason),
         )
