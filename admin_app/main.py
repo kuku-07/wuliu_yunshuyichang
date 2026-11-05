@@ -13,8 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from . import config, db
 from .deps import Forbidden, LoginRequired
 from .routers import (
-    audit, auth, chat, data_admin, grants, ingest, kb, lanes, mainline, prompts,
-    shipments, todos, users,
+    audit, auth, chat, data_admin, grants, ingest, kb, lanes, mainline, portal,
+    prompts, shipments, todos, users,
 )
 from .services import agent_core, ops
 from .web import render
@@ -66,19 +66,7 @@ async def lifespan(app: FastAPI):
     patrol_thread = threading.Thread(target=_patrol, daemon=True)
     patrol_thread.start()
 
-    # 90 天留存：启动时清理一次过期数据（docs/02 §7）
-    try:
-        conn = db.connect()
-        try:
-            from .services import retention
-
-            result = retention.purge(conn, None)
-            if result["messages"] or result["logs"]:
-                logger.info("留存清理完成：%s", result)
-        finally:
-            conn.close()
-    except Exception:
-        logger.warning("留存清理失败（不影响启动）", exc_info=True)
+    # 90 天留存改为「申请 → 合规审批 → 执行」，不再启动即删（docs/02 §7）
 
     yield
 
@@ -156,6 +144,7 @@ app.include_router(mainline.router)
 app.include_router(users.router)
 app.include_router(ingest.router)
 app.include_router(todos.router)
+app.include_router(portal.router)
 app.include_router(data_admin.router)
 app.include_router(kb.router)
 app.include_router(prompts.router)

@@ -42,3 +42,6 @@ SSE_HEARTBEAT_SECONDS = float(os.getenv("SSE_HEARTBEAT_SECONDS", "15"))
 
 # 后台巡检间隔（秒）：扫描超时升级与预警
 OPS_TICK_SECONDS = int(os.getenv("OPS_TICK_SECONDS", "60"))
+
+# 生产部署走 HTTPS 时打开；本地 HTTP 保持 False，否则浏览器不写入 Cookie
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "0") in {"1", "true", "True"}

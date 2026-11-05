@@ -10,7 +10,7 @@ import sqlite3
 import uuid
 
 from ..db import now_iso
-from . import links as link_service
+from . import links as link_service, snapshots
 
 
 def add_tracks(conn: sqlite3.Connection, records: list[dict]) -> tuple[int, list[str]]:
@@ -42,6 +42,9 @@ def add_tracks(conn: sqlite3.Connection, records: list[dict]) -> tuple[int, list
         accepted += 1
     if accepted:
         conn.commit()
+        for number in {str(record.get("shipment_no") or "").strip().upper() for record in records}:
+            if number:
+                snapshots.capture(conn, number, "GPS")
     return accepted, errors
 
 

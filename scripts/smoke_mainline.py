@@ -215,9 +215,26 @@ def main() -> int:
         conn.commit()
     finally:
         conn.close()
-    purged = post(admin, "/admin/metrics/retention", {})
-    if "已清理" not in purged.text:
-        fail("留存清理", purged.text[:200])
+    requested = post(admin, "/admin/metrics/retention/request", {})
+    if "已提交" not in requested.text:
+        fail("提交清理申请", requested.text[:200])
+
+    conn = connect()
+    try:
+        req = conn.execute(
+            "SELECT id FROM retention_requests WHERE status='pending'"
+            " ORDER BY requested_at DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+    if req is None:
+        fail("清理申请落库", "无记录")
+
+    auditor = TestClient(app)
+    login(auditor, "auditor")
+    approved = post(auditor, f"/admin/metrics/retention/{req['id']}/approve", {})
+    if "已批准并清理" not in approved.text:
+        fail("合规审批后执行清理", approved.text[:200])
     conn = connect()
     try:
         left = conn.execute("SELECT COUNT(*) FROM messages WHERE id='m_old'").fetchone()[0]
@@ -225,7 +242,7 @@ def main() -> int:
         conn.close()
     if left:
         fail("90 天前消息被清理", str(left))
-    ok("90 天留存清理：过期消息被删除")
+    ok("留存清理走「申请 → 合规审批 → 执行」，过期消息被删除")
 
     # ---- 6. 契约：幂等 ----
     chat = TestClient(app)

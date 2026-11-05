@@ -180,10 +180,12 @@ async def upload_submit(
     for idx, chunk in enumerate(chunks, start=1):
         db.execute(
             "INSERT INTO kb_chunks"
-            " (id, doc_id, version, chunk_no, section, text, token_count, is_active, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?)",
+            " (id, doc_id, version, chunk_no, section, text, token_count, is_active,"
+            "  embedding_ref, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
             (f"chk_{uuid.uuid4().hex[:10]}", doc_id, version, idx,
-             chunk["section"], chunk["text"], len(chunk["text"]), 0, now),
+             chunk["section"], chunk["text"], len(chunk["text"]), 0,
+             f"local:{doc_id}:v{version}:{idx}", now),
         )
 
     stored = f"{uuid.uuid4().hex}{suffix}"

@@ -8,6 +8,7 @@ from ..services import alerts as alert_service
 from ..services import draft as draft_service
 from ..services import metrics as metric_service
 from ..services import retention
+from ..services import routing
 from ..services import tms as tms_service
 from ..services.users import list_users
 from ..web import check_csrf, redirect, render
@@ -19,7 +20,7 @@ router = APIRouter(prefix="/admin", tags=["mainline"])
 def exceptions_page(
     request: Request,
     status: str = "",
-    user=Depends(require_page("kb:read")),
+    user=Depends(require_page("ops:read")),
     db=Depends(get_db),
 ):
     # 打开页面时顺手扫一次超时与预警，省一个定时任务
@@ -29,6 +30,7 @@ def exceptions_page(
     return render(
         request, user, "exceptions.html",
         events=tms_service.list_events_with_state(db, status),
+        return_hint="",
         repairs=tms_service.list_repairs(db),
         alerts=alert_service.list_alerts(db),
         handlers=[u for u in list_users(db) if u["status"] == "active"],
@@ -70,7 +72,7 @@ def repair(request: Request, csrf_token: str = Form(""), queue_id: str = Form(""
 
 @router.post("/exceptions/{event_id}/accept")
 def accept_event(request: Request, event_id: str, csrf_token: str = Form(""),
-                 user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+                 user=Depends(require_page("ops:act")), db=Depends(get_db)):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
     ok, message = tms_service.accept_event(db, user, event_id)
@@ -80,11 +82,11 @@ def accept_event(request: Request, event_id: str, csrf_token: str = Form(""),
 
 @router.post("/exceptions/{event_id}/close")
 def close_event(request: Request, event_id: str, csrf_token: str = Form(""),
-                note: str = Form(""),
-                user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+                note: str = Form(""), return_reason: str = Form(""),
+                user=Depends(require_page("ops:act")), db=Depends(get_db)):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
-    ok, message = tms_service.close_event(db, user, event_id, note)
+    ok, message = tms_service.close_event(db, user, event_id, note, return_reason)
     return redirect("/admin/exceptions", ok=message if ok else None,
                     err=None if ok else message)
 
@@ -92,7 +94,7 @@ def close_event(request: Request, event_id: str, csrf_token: str = Form(""),
 @router.post("/exceptions/{event_id}/assign")
 def assign_event(request: Request, event_id: str, csrf_token: str = Form(""),
                  handler: str = Form(""),
-                 user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+                 user=Depends(require_page("ops:act")), db=Depends(get_db)):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
     ok, message = tms_service.assign_event(db, user, event_id, handler)
@@ -100,10 +102,33 @@ def assign_event(request: Request, event_id: str, csrf_token: str = Form(""),
                     err=None if ok else message)
 
 
+@router.post("/exceptions/{event_id}/handover")
+def handover_event(request: Request, event_id: str, csrf_token: str = Form(""),
+                   handler: str = Form(""), note: str = Form(""),
+                   user=Depends(require_page("ops:act")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
+    ok, message = tms_service.transfer_event(db, user, event_id, handler, note)
+    return redirect("/admin/exceptions", ok=message if ok else None,
+                    err=None if ok else message)
+
+
+@router.post("/exceptions/route")
+def route_unassigned(request: Request, csrf_token: str = Form(""),
+                     user=Depends(require_page("ops:act")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
+    result = routing.route_unassigned(db)
+    return redirect(
+        "/admin/exceptions",
+        ok=f"自动路由完成：新指派 {result['routed']} 条，仍未指派 {result['pending']} 条",
+    )
+
+
 @router.post("/alerts/{alert_id}/review")
 def review_alert(request: Request, alert_id: str, csrf_token: str = Form(""),
                  verdict: str = Form(""), note: str = Form(""),
-                 user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+                 user=Depends(require_page("ops:act")), db=Depends(get_db)):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
     ok, message = alert_service.review(db, user, alert_id, verdict, note)
@@ -113,7 +138,7 @@ def review_alert(request: Request, alert_id: str, csrf_token: str = Form(""),
 
 @router.get("/workbench")
 def workbench_page(request: Request, shipment_no: str = "",
-                   user=Depends(require_page("kb:read")), db=Depends(get_db)):
+                   user=Depends(require_page("ops:read")), db=Depends(get_db)):
     evidence = draft_service.evidence(db, (shipment_no or "").strip().upper()) if shipment_no else None
     return render(
         request, user, "workbench.html",
@@ -122,16 +147,17 @@ def workbench_page(request: Request, shipment_no: str = "",
         drafts=draft_service.list_drafts(db),
         review_reasons=draft_service.REVIEW_REASONS,
         sent_channels=draft_service.SENT_CHANNELS,
+        scenarios=draft_service.SCENARIOS,
     )
 
 
 @router.post("/workbench/generate")
 def generate_draft(request: Request, csrf_token: str = Form(""),
-                   shipment_no: str = Form(""),
+                   shipment_no: str = Form(""), scenario: str = Form("query"),
                    user=Depends(require_page("kb:edit")), db=Depends(get_db)):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/workbench", err="页面已过期，请刷新后重试")
-    ok, message, payload = draft_service.generate(db, user, shipment_no)
+    ok, message, payload = draft_service.generate(db, user, shipment_no, scenario)
     target = f"/admin/workbench?shipment_no={shipment_no.strip().upper()}"
     return redirect(target, ok=message if ok else None, err=None if ok else message)
 
@@ -161,17 +187,39 @@ def mark_sent(request: Request, draft_id: str, csrf_token: str = Form(""),
 @router.get("/metrics")
 def metrics_page(request: Request, user=Depends(require_page("kb:read")),
                  db=Depends(get_db)):
-    return render(request, user, "metrics.html", stats=metric_service.overview(db))
+    return render(
+        request, user, "metrics.html",
+        stats=metric_service.overview(db),
+        retention_requests=retention.list_requests(db),
+    )
 
 
-@router.post("/metrics/retention")
-def run_retention(request: Request, csrf_token: str = Form(""),
-                  user=Depends(require_page("users:manage")), db=Depends(get_db)):
+@router.post("/metrics/retention/request")
+def request_retention(request: Request, csrf_token: str = Form(""),
+                      user=Depends(require_page("users:manage")), db=Depends(get_db)):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/metrics", err="页面已过期，请刷新后重试")
-    result = retention.purge(db, user)
-    return redirect(
-        "/admin/metrics",
-        ok=f"已清理 {result['cutoff']} 之前的数据：消息 {result['messages']} 条、"
-           f"日志 {result['logs']} 条",
-    )
+    ok, message, _ = retention.request(db, user, note="从指标页发起")
+    return redirect("/admin/metrics", ok=message if ok else None,
+                    err=None if ok else message)
+
+
+@router.post("/metrics/retention/{request_id}/approve")
+def approve_retention(request: Request, request_id: str, csrf_token: str = Form(""),
+                      user=Depends(require_page("audit:mark")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/metrics", err="页面已过期，请刷新后重试")
+    ok, message = retention.approve(db, user, request_id)
+    return redirect("/admin/metrics", ok=message if ok else None,
+                    err=None if ok else message)
+
+
+@router.post("/metrics/retention/{request_id}/reject")
+def reject_retention(request: Request, request_id: str, csrf_token: str = Form(""),
+                     note: str = Form(""),
+                     user=Depends(require_page("audit:mark")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/metrics", err="页面已过期，请刷新后重试")
+    ok, message = retention.reject(db, user, request_id, note)
+    return redirect("/admin/metrics", ok=message if ok else None,
+                    err=None if ok else message)

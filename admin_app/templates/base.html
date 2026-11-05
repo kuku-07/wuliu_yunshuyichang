@@ -18,6 +18,7 @@
       </div>
     </div>
 
+    {% if can('kb:read') or can('ops:read') or can('users:manage') %}
     <nav class="nav">
       <div class="nav-label">规则与问答</div>
       <a class="nav-item {% if request.url.path.startswith('/admin/chat') %}active{% endif %}" href="/admin/chat">一线问答</a>
@@ -40,6 +41,7 @@
       <a class="nav-item {% if request.url.path.startswith('/admin/data') %}active{% endif %}" href="/admin/data">数据管理</a>
       {% endif %}
     </nav>
+    {% endif %}
 
     <div class="sidebar-user">
       <div class="avatar">{{ user.name[0] if user else '?' }}</div>

@@ -21,13 +21,19 @@ class Forbidden(Exception):
 
 
 PERMS: dict[str, set[str]] = {
-    "rule_admin": {"kb:read", "kb:edit", "kb:submit", "prompt:read", "prompt:edit", "audit:read"},
+    "rule_admin": {
+        "kb:read", "kb:edit", "kb:submit", "prompt:read", "prompt:edit",
+        "audit:read", "ops:read",
+    },
     "supervisor": {
         "kb:read", "kb:approve", "kb:publish", "kb:offline",
         "prompt:read", "prompt:edit", "prompt:publish",
-        "audit:read", "audit:mark", "audit:export",
+        "audit:read", "audit:mark", "audit:export", "ops:read", "ops:act",
     },
-    "auditor": {"kb:read", "prompt:read", "audit:read", "audit:mark", "audit:export"},
+    "auditor": {
+        "kb:read", "prompt:read", "audit:read", "audit:mark", "audit:export",
+        "ops:read",
+    },
     # 系统管理员 = 运维全权：规则库、提示词、审计、索引、账号与数据都要能管。
     # 注意这会绕过「提交→批准→发布」的三方分离；若要严格分离，把 kb:approve /
     # kb:publish / prompt:publish 从这里删掉即可。
@@ -35,8 +41,13 @@ PERMS: dict[str, set[str]] = {
         "kb:read", "kb:edit", "kb:submit", "kb:approve", "kb:publish", "kb:offline",
         "prompt:read", "prompt:edit", "prompt:publish",
         "audit:read", "audit:mark", "audit:export",
-        "index:rebuild", "users:manage",
+        "index:rebuild", "users:manage", "ops:read", "ops:act",
     },
+    # 现场调度：只看异常与待办，可受理/转交/关闭，不能碰规则与审计
+    "dispatcher": {"ops:read", "ops:act"},
+    # 承运商与客户：只读门户，只看授权给他们的运单
+    "carrier": {"portal:read"},
+    "customer": {"portal:read"},
 }
 
 ROLE_NAMES = {
@@ -44,6 +55,9 @@ ROLE_NAMES = {
     "supervisor": "客服主管",
     "auditor": "合规审计",
     "sys_admin": "系统管理员",
+    "dispatcher": "现场调度",
+    "carrier": "承运商经理",
+    "customer": "客户",
 }
 
 

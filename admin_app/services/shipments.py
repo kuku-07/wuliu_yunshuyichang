@@ -12,6 +12,7 @@ import sqlite3
 
 from ..db import now_iso
 from . import grants as grant_service
+from ..security import object_hash
 from .audit_log import log as audit
 
 # 状态码 → 展示文案。中文直接给到界面和提示词，避免模型自己翻译。
@@ -91,6 +92,13 @@ def save(
         return False, f"运单状态不合法：{status}"
 
     existing = get(conn, number)
+    before_hash = object_hash(
+        {key: existing[key] for key in ("lane_scope", "customer", "status")}
+        if existing else None
+    )
+    after_hash = object_hash(
+        {"lane_scope": lane, "customer": customer or "", "status": status}
+    )
     now = now_iso()
     if existing:
         conn.execute(
@@ -113,7 +121,8 @@ def save(
         action = "shipment.create"
     conn.commit()
     audit(conn, actor, action, "shipment", number,
-          f"线路={lane} 客户={customer or '-'} 状态={status}")
+          f"线路={lane} 客户={customer or '-'} 状态={status}",
+          before_hash=before_hash, after_hash=after_hash)
     conn.commit()
     return True, ""
 

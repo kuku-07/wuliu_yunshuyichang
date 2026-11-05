@@ -8,15 +8,31 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from datetime import datetime, timedelta
 from typing import Any
 
 from ..db import now_iso
-from . import agent_core, chat_service
+from . import agent_core, chat_service, circuit
 from . import ingest as ingest_service
-from . import links as link_service
+from . import links as link_service, snapshots
 from .audit_log import log as audit
 
 DRAFT_QUESTION = "这票货现在是什么情况？异常应如何处置？"
+
+SCENARIOS = {
+    "query": "查单",
+    "expedite": "催单",
+}
+
+SCENARIO_QUESTIONS = {
+    "query": DRAFT_QUESTION,
+    "expedite": "这票货是否需要催办？应如何向承运商催办并跟进回执？",
+}
+
+SCENARIO_RULES = {
+    "query": "说明现状与下一步，不要推断未记录的信息。",
+    "expedite": "判断是否需要催办；需要时给出催办对象、话术要点与跟进节点，不要承诺时效。",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -57,6 +73,7 @@ def evidence(conn: sqlite3.Connection, shipment_no: str) -> dict | None:
         "im_notes": ingest_service.list_im_notes(conn, shipment_no),
         "tracks": tracks,
         "events": events,
+        "snapshot": snapshots.latest(conn, shipment_no),
         "data_time": max(data_times + [now_iso()]) if data_times else now_iso(),
     }
 
@@ -154,11 +171,73 @@ def render_context(blocks: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate(conn: sqlite3.Connection, user: dict, shipment_no: str) -> tuple[bool, str, dict | None]:
+def stop_advice(ev: dict) -> tuple[str, str] | None:
+    """按 docs/02 §7 停止自动建议：GPS 弱网、客户改地址、回执延迟。"""
+    shipment = ev["shipment"]
+    events = ev.get("events") or []
+
+    for event in events:
+        text = f"{event['event_type']} {event.get('reason_code') or ''}"
+        if any(key in text for key in ("改地址", "改址", "地址变更", "ADDRESS")):
+            return "STOP_ADDRESS_CHANGE", "客户改地址"
+
+    delivered = shipment.get("delivered_at")
+    if delivered and not shipment.get("receipt_at"):
+        try:
+            if datetime.now() - datetime.fromisoformat(delivered) > timedelta(hours=24):
+                return "STOP_RECEIPT_DELAY", "已签收但回执超过 24 小时未回传"
+        except ValueError:
+            pass
+
+    tracks = ev.get("tracks") or []
+    if not delivered and tracks:
+        last = tracks[0]
+        raw = last.get("data_time") or last.get("at")
+        try:
+            if raw and datetime.now() - datetime.fromisoformat(raw) > timedelta(hours=2):
+                return "STOP_GPS_WEAK", "轨迹超过 2 小时未刷新（GPS 弱网或停滞后）"
+        except ValueError:
+            pass
+    return None
+
+
+def generate(
+    conn: sqlite3.Connection, user: dict, shipment_no: str, scenario: str = "query",
+) -> tuple[bool, str, dict | None]:
     number = (shipment_no or "").strip().upper()
+    if scenario not in SCENARIOS:
+        return False, "不支持的处理场景", None
+
+    tripped, rate = circuit.status(conn)
+    if tripped:
+        return False, (
+            f"预警误报率 {rate}% 已连续超过 10%，自动建议暂停（熔断），请人工处理"
+        ), None
+
     ev = evidence(conn, number)
     if ev is None:
         return False, f"运单 {number} 不存在，请先在「运单登记」里登记", None
+
+    stop = stop_advice(ev)
+    if stop:
+        reason, label = stop
+        draft_id = f"d_{uuid.uuid4().hex[:12]}"
+        conn.execute(
+            "INSERT INTO drafts"
+            " (id, shipment_no, content, status, scenario, gate_reason, citations_json,"
+            "  evidence_json, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (draft_id, number,
+             f"已停止自动建议：{label}。请人工接手处置，并记录接手人与确认时间。",
+             "stopped", scenario, reason, "[]",
+             json.dumps(evidence_blocks(ev), ensure_ascii=False), now_iso()),
+        )
+        conn.commit()
+        audit(conn, user, "draft.stop_advice", "draft", draft_id, f"{number} {reason}")
+        conn.commit()
+        return True, f"已停止自动建议（{label}），请人工接手", {
+            "id": draft_id, "status": "stopped",
+        }
 
     blocks = evidence_blocks(ev)
     context = render_context(blocks)
@@ -174,9 +253,10 @@ def generate(conn: sqlite3.Connection, user: dict, shipment_no: str) -> tuple[bo
     if gate:
         conn.execute(
             "INSERT INTO drafts"
-            " (id, shipment_no, content, status, gate_reason, citations_json, evidence_json, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?)",
-            (draft_id, number, gate["message"], "taken_over", gate["reason_code"],
+            " (id, shipment_no, content, status, scenario, gate_reason, citations_json,"
+            "  evidence_json, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (draft_id, number, gate["message"], "taken_over", scenario, gate["reason_code"],
              json.dumps([], ensure_ascii=False), json.dumps(blocks, ensure_ascii=False), now),
         )
         conn.commit()
@@ -191,9 +271,10 @@ def generate(conn: sqlite3.Connection, user: dict, shipment_no: str) -> tuple[bo
         "【参考片段】\n"
         f"{context}\n\n"
         "【使用者问题】\n"
-        f"运单 {number}：{DRAFT_QUESTION}\n\n"
+        f"运单 {number}：{SCENARIO_QUESTIONS[scenario]}\n\n"
         "【要求】\n"
-        "只依据上面的记录说明现状与下一步，不要推断未记录的信息；"
+        "只依据上面的记录回答，不要推断未记录的信息；"
+        f"{SCENARIO_RULES[scenario]}"
         "涉及赔付、危险品、事故、判责时直接说明需人工接管。"
     )
 
@@ -221,9 +302,10 @@ def generate(conn: sqlite3.Connection, user: dict, shipment_no: str) -> tuple[bo
     status = "pending_review" if report.passed else "needs_recheck"
     conn.execute(
         "INSERT INTO drafts"
-        " (id, shipment_no, content, status, guardrail, citations_json, evidence_json, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?)",
-        (draft_id, number, answer, status,
+        " (id, shipment_no, content, status, scenario, guardrail, citations_json,"
+        "  evidence_json, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?)",
+        (draft_id, number, answer, status, scenario,
          "；".join(report.violations) if report.violations else "",
          json.dumps(citations, ensure_ascii=False),
          json.dumps(blocks, ensure_ascii=False), now),

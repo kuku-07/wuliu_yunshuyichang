@@ -15,11 +15,14 @@ def log(
     object_id: str,
     detail: str = "",
     request_id: str = "",
+    before_hash: str = "",
+    after_hash: str = "",
 ) -> None:
     conn.execute(
         "INSERT INTO audit_logs"
-        " (id, actor_id, actor_name, action, object_type, object_id, detail, request_id, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?)",
+        " (id, actor_id, actor_name, action, object_type, object_id, detail, request_id,"
+        "  before_hash, after_hash, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
             f"a_{uuid.uuid4().hex[:12]}",
             actor.get("id") if actor else None,
@@ -29,6 +32,8 @@ def log(
             object_id,
             detail[:500],
             request_id,
+            before_hash,
+            after_hash,
             now_iso(),
         ),
     )

@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 from ..db import now_iso
 from . import grants as grant_service
 from . import lanes as lane_service
-from . import notify
+from . import notify, routing, snapshots
 from .audit_log import log as audit
 
 SAMPLE_DIR = Path(config.BASE_DIR).parent / "samples" / "tms"
@@ -235,6 +235,7 @@ def import_samples(conn: sqlite3.Connection, actor: dict, directory: Path | None
         subs, tracks = _upsert_children(conn, grant_service.normalize(query["shipment_no"]), query)
         stats["sub_shipments"] += subs
         stats["tracks"] += tracks
+        snapshots.capture(conn, grant_service.normalize(query["shipment_no"]), "TMS")
 
     known_shipments = {
         row[0] for row in conn.execute("SELECT shipment_no FROM shipments").fetchall()
@@ -251,6 +252,8 @@ def import_samples(conn: sqlite3.Connection, actor: dict, directory: Path | None
         stats["events"] += 1
 
     conn.commit()
+    routed = routing.route_unassigned(conn)
+    stats["routed"] = routed["routed"]
     audit(
         conn, actor, "tms.import", "tms", "samples",
         f"运单 {stats['shipments']} / 事件 {stats['events']} / 待修复 {stats['queued']}",
@@ -309,6 +312,7 @@ def resolve_repair(
         return False, f"运单 {event['shipment_no']} 不在主数据中，请先登记运单"
 
     _insert_event(conn, event)
+    routing.route_event(conn, event["id"], actor)
     conn.execute(
         "UPDATE repair_queue SET status='resolved', resolved_at=? WHERE id=?",
         (now_iso(), queue_id),
@@ -399,6 +403,7 @@ def accept_event(conn: sqlite3.Connection, actor: dict, event_id: str) -> tuple[
 
 def close_event(
     conn: sqlite3.Connection, actor: dict, event_id: str, note: str = "",
+    return_reason: str = "",
 ) -> tuple[bool, str]:
     row = conn.execute("SELECT * FROM exception_events WHERE id=?", (event_id,)).fetchone()
     if row is None:
@@ -410,8 +415,9 @@ def close_event(
 
     conn.execute(
         "UPDATE exception_events SET status='closed', closed_at=?, closed_by=?,"
-        " escalation_note=? WHERE id=?",
-        (now_iso(), actor["id"], (note or "").strip()[:200], event_id),
+        " escalation_note=?, return_reason=? WHERE id=?",
+        (now_iso(), actor["id"], (note or "").strip()[:200],
+         (return_reason or "").strip()[:200], event_id),
     )
     conn.commit()
     audit(conn, actor, "event.close", "exception_event", event_id,
@@ -492,3 +498,49 @@ def list_events_with_state(conn: sqlite3.Connection, status: str = "") -> list[d
     for event in events:
         event["state"] = event_state(event)
     return events
+
+def transfer_event(
+    conn: sqlite3.Connection, actor: dict, event_id: str, to_user: str, note: str = "",
+) -> tuple[bool, str]:
+    """显式转交：责任只随受理/转交转移，聊天里发消息不算。"""
+    row = conn.execute("SELECT * FROM exception_events WHERE id=?", (event_id,)).fetchone()
+    if row is None:
+        return False, "异常事件不存在"
+    if row["closed_at"]:
+        return False, "该事件已关闭"
+    if not row["accepted_at"]:
+        return False, "请先受理再转交"
+    if not to_user:
+        return False, "请选择接手人"
+    if to_user == row["handler"]:
+        return False, "对方已是当前处理人"
+
+    conn.execute(
+        "INSERT INTO event_handovers (id, event_id, from_user, to_user, note, created_at)"
+        " VALUES (?,?,?,?,?,?)",
+        (
+            f"ho_{uuid.uuid4().hex[:12]}", event_id, row["handler"] or "",
+            to_user, (note or "").strip()[:200], now_iso(),
+        ),
+    )
+    conn.execute("UPDATE exception_events SET handler=? WHERE id=?", (to_user, event_id))
+    conn.commit()
+    notify.push(
+        conn, [to_user], "ASSIGN",
+        f"转交给你处理：{row['shipment_no']} · {row['event_type']}",
+        (note or "由同事转交")[:200], "/admin/todos",
+    )
+    audit(conn, actor, "event.handover", "exception_event", event_id,
+          f"{row['shipment_no']} {row['handler'] or '-'} → {to_user}；{note or '-'}")
+    conn.commit()
+    return True, "已转交"
+
+
+def list_handovers(conn: sqlite3.Connection, event_id: str) -> list[dict]:
+    return [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM event_handovers WHERE event_id=? ORDER BY created_at DESC",
+            (event_id,),
+        ).fetchall()
+    ]

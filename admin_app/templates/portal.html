@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}运单查询{% endblock %}
+{% block page_title %}运单查询{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>授权给 {{ user.name }} 的运单</h2>
+      <p class="role-note">只读视图：仅展示已授权运单，客户名称已脱敏，不含内部规则与审计。</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>运单号</th><th>状态</th><th>客户</th><th>计划到达</th>
+        <th>实际到达</th><th>回执</th><th>最近轨迹</th>
+      </tr></thead>
+      <tbody>
+        {% for s in shipments %}
+        <tr>
+          <td class="mono">{{ s.shipment_no }}</td>
+          <td><span class="badge badge-draft">{{ s.status or '-' }}</span></td>
+          <td>{{ s.customer_masked or '-' }}</td>
+          <td class="muted">{{ s.plan_eta|fmt_dt if s.plan_eta else '-' }}</td>
+          <td class="muted">{{ s.delivered_at|fmt_dt if s.delivered_at else '未到达' }}</td>
+          <td class="muted">{{ s.receipt_at|fmt_dt if s.receipt_at else '未回传' }}</td>
+          <td class="muted small">
+            {% if s.last_track %}
+              {{ s.last_track.at|fmt_dt }} · {{ s.last_track.status }}
+              {% if s.last_track.location %}· {{ s.last_track.location }}{% endif %}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">还没有授权给该账号的运单。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

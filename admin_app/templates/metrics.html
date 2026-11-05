@@ -12,10 +12,10 @@
       </p>
     </div>
     {% if can('users:manage') %}
-    <form method="post" action="/admin/metrics/retention" class="inline-form"
-          onsubmit="return confirm('清理 90 天前的消息与审计日志？该操作不可撤销。');">
+    <form method="post" action="/admin/metrics/retention/request" class="inline-form"
+          onsubmit="return confirm('提交 90 天前数据的清理申请？需合规审批后才会执行。');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-danger" type="submit">清理 90 天前数据</button>
+      <button class="btn btn-danger" type="submit">申请清理 90 天前数据</button>
     </form>
     {% endif %}
   </div>
@@ -58,8 +58,46 @@
     </table>
   </div>
 
+  <h3 style="margin-top:18px;">留存清理申请</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>申请</th><th>状态</th><th>申请人</th><th>申请时间</th><th>审批人</th><th>操作</th></tr></thead>
+      <tbody>
+        {% for r in retention_requests %}
+        <tr>
+          <td class="mono">{{ r.id }}<div class="muted small">保留 {{ r.days }} 天</div></td>
+          <td>
+            {% if r.status == 'approved' %}<span class="badge badge-active">已执行</span>
+            {% elif r.status == 'rejected' %}<span class="badge badge-offline">已驳回</span>
+            {% else %}<span class="badge badge-pending">待审批</span>{% endif %}
+          </td>
+          <td class="muted">{{ r.requested_by }}</td>
+          <td class="muted">{{ r.requested_at|fmt_dt }}</td>
+          <td class="muted">{{ r.decided_by or '-' }}</td>
+          <td>
+            {% if r.status == 'pending' and can('audit:mark') %}
+            <form method="post" action="/admin/metrics/retention/{{ r.id }}/approve" class="inline-form"
+                  onsubmit="return confirm('批准后立即删除 90 天前数据，确认？');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn btn-primary btn-sm" type="submit">批准并执行</button>
+            </form>
+            <form method="post" action="/admin/metrics/retention/{{ r.id }}/reject" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="text" name="note" placeholder="驳回原因" class="mini-input">
+              <button class="btn btn-ghost btn-sm" type="submit">驳回</button>
+            </form>
+            {% else %}<span class="muted small">-</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">没有清理申请。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
   <p class="role-note" style="margin-top:10px;">
-    留存：消息与审计日志保留 90 天，到期整批清理（append-only 指不改不删单条，到期清理是合规动作）。
+    留存：消息与审计日志保留 90 天；到期由安全与合规主管审批后执行（申请人不能审批自己的申请）。
   </p>
 </div>
 {% endblock %}

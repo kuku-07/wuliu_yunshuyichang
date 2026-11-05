@@ -9,7 +9,7 @@ import json
 import sqlite3
 
 from ..db import now_iso
-from ..security import hash_password
+from ..security import hash_password, object_hash
 from . import lanes as lane_service
 from .audit_log import log as audit
 
@@ -18,6 +18,9 @@ ROLES = {
     "supervisor": "客服主管",
     "auditor": "合规审计",
     "sys_admin": "系统管理员",
+    "dispatcher": "现场调度",
+    "carrier": "承运商经理",
+    "customer": "客户",
 }
 MIN_PASSWORD = 12
 
@@ -113,13 +116,21 @@ def update(
         if role != "sys_admin" or status != "active":
             return False, "这是最后一个系统管理员，不能降级或停用"
 
+    before_hash = object_hash(
+        {"name": row["name"], "role": row["role"], "status": row["status"],
+         "lanes": row["lane_scopes"]}
+    )
+    after_lanes = json.dumps(lanes, ensure_ascii=False)
     conn.execute(
         "UPDATE admin_users SET name=?, role=?, lane_scopes=?, status=? WHERE id=?",
-        (name.strip(), role, json.dumps(lanes, ensure_ascii=False), status, user_id),
+        (name.strip(), role, after_lanes, status, user_id),
     )
     conn.commit()
     audit(conn, actor, "user.update", "admin_user", user_id,
-          f"{row['employee_no']} → {role} / {status} / {','.join(lanes) or '-'}")
+          f"{row['employee_no']} → {role} / {status} / {','.join(lanes) or '-'}",
+          before_hash=before_hash,
+          after_hash=object_hash({"name": name.strip(), "role": role,
+                                  "status": status, "lanes": after_lanes}))
     conn.commit()
     return True, ""
 

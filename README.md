@@ -43,6 +43,7 @@ python prototype/phase1_cli.py                # 交互问答
 | [scripts/smoke_mainline.py](scripts/smoke_mainline.py) | 18 项主线 + 契约测试 |
 | [scripts/smoke_ops.py](scripts/smoke_ops.py) | 9 项账号/线路权限、受理升级、预警测试 |
 | [scripts/smoke_platform.py](scripts/smoke_platform.py) | 8 项接入/映射/修正原因/外发/心跳测试 |
+| [scripts/smoke_docs.py](scripts/smoke_docs.py) | 12 项文档缺口验收（快照/路由/交接/停止建议/熔断/角色等） |
 | [scripts/smoke_data.py](scripts/smoke_data.py) | 12 项演示数据删除 / 恢复测试 |
 
 ```powershell
@@ -119,6 +120,12 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
   「我的待办」汇总通知、指派给我的异常、待我审核的草稿。
 - **聊天重试**：错误气泡带「重试」，直接复用上一次提问。
 - 口径：异常首响**目标 15 分钟**、规则硬性时限 **30 分钟**（超时升级），指标页两者都给。
+- **快照版本**：每次接入留带版本全量数据；**催单**与查单分场景生成。
+- **自动路由与交接**：按类型路由到具名处理人；转交显式留痕，发消息不算责任转移。
+- **停止自动建议**：GPS 弱网、客户改地址、回执延迟时停止生成，转人工。
+- **误报率熔断**：最近 14 天误报率 >10% 自动暂停草稿生成。
+- **留存合规**：清理需「申请 → 合规审批 → 执行」，申请人不能自批。
+- **角色门户**：现场调度可处置异常；承运商/客户只读 `/portal` 授权运单。
 
 ## 阶段 3 管理后台（可运行）
 

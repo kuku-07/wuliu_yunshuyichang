@@ -30,13 +30,15 @@
         线路 {{ evidence.shipment.lane_scope }} ·
         状态 {{ evidence.shipment.status }} ·
         数据时间 {{ evidence.data_time|fmt_dt }}
+        {% if evidence.snapshot %}· 快照 v{{ evidence.snapshot.version }}{% endif %}
       </p>
     </div>
     {% if can('kb:edit') %}
     <form method="post" action="/admin/workbench/generate" class="inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="shipment_no" value="{{ evidence.shipment.shipment_no }}">
-      <button class="btn btn-primary" type="submit">生成回复草稿</button>
+      <button class="btn btn-primary" type="submit" name="scenario" value="query">生成查单草稿</button>
+      <button class="btn btn-ghost" type="submit" name="scenario" value="expedite">生成催单草稿</button>
     </form>
     {% endif %}
   </div>
@@ -138,17 +140,19 @@
   <div class="table-wrap">
     <table class="table">
       <thead><tr>
-        <th>运单</th><th>状态</th><th>内容摘录</th><th>护栏</th><th>生成时间</th><th>审核</th>
+        <th>运单</th><th>场景</th><th>状态</th><th>内容摘录</th><th>护栏</th><th>生成时间</th><th>审核</th>
       </tr></thead>
       <tbody>
         {% for d in drafts %}
         <tr>
           <td class="mono">{{ d.shipment_no }}</td>
+          <td>{{ scenarios.get(d.scenario, d.scenario) }}</td>
           <td>
             {% if d.status == 'approved' %}<span class="badge badge-active">已通过</span>
             {% elif d.status == 'pending_review' %}<span class="badge badge-approved">待审核</span>
             {% elif d.status == 'needs_recheck' %}<span class="badge badge-pending">需复核</span>
             {% elif d.status == 'taken_over' %}<span class="badge badge-takeover">已接管</span>
+            {% elif d.status == 'stopped' %}<span class="badge badge-offline">已停止自动建议</span>
             {% else %}<span class="badge badge-offline">已退回</span>{% endif %}
           </td>
           <td class="muted small">{{ d.content[:60] }}…</td>
@@ -193,7 +197,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="muted">还没有草稿。</td></tr>
+        <tr><td colspan="7" class="muted">还没有草稿。</td></tr>
         {% endfor %}
       </tbody>
     </table>

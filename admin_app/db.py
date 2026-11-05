@@ -238,6 +238,9 @@ CREATE TABLE IF NOT EXISTS exception_events (
     handler        TEXT NOT NULL DEFAULT '',
     due_at         TEXT,
     status         TEXT NOT NULL DEFAULT 'normalized',
+    return_reason  TEXT NOT NULL DEFAULT '',
+    routed_at      TEXT,
+    route_rule     TEXT NOT NULL DEFAULT '',
     accepted_at    TEXT,
     accepted_by    TEXT,
     closed_at      TEXT,
@@ -263,6 +266,7 @@ CREATE TABLE IF NOT EXISTS drafts (
     id             TEXT PRIMARY KEY,
     shipment_no    TEXT NOT NULL,
     content        TEXT NOT NULL,
+    scenario       TEXT NOT NULL DEFAULT 'query',
     status         TEXT NOT NULL DEFAULT 'pending_review',
     gate_reason    TEXT NOT NULL DEFAULT '',
     guardrail      TEXT NOT NULL DEFAULT '',
@@ -338,6 +342,38 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS shipment_snapshots (
+    id          TEXT PRIMARY KEY,
+    shipment_no TEXT NOT NULL,
+    version     INTEGER NOT NULL,
+    data_json   TEXT NOT NULL,
+    data_time   TEXT NOT NULL,
+    source      TEXT NOT NULL DEFAULT 'TMS',
+    created_at  TEXT NOT NULL,
+    UNIQUE(shipment_no, version)
+);
+
+CREATE TABLE IF NOT EXISTS event_handovers (
+    id         TEXT PRIMARY KEY,
+    event_id   TEXT NOT NULL,
+    from_user  TEXT NOT NULL DEFAULT '',
+    to_user    TEXT NOT NULL,
+    note       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS retention_requests (
+    id           TEXT PRIMARY KEY,
+    days         INTEGER NOT NULL DEFAULT 90,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    requested_by TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    decided_by   TEXT,
+    decided_at   TEXT,
+    note         TEXT NOT NULL DEFAULT '',
+    result_json  TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_citations_message ON citations(message_id);
 CREATE INDEX IF NOT EXISTS idx_grants_lookup ON authorization_grants(user_id, shipment_no, status);
@@ -393,6 +429,12 @@ def init_db() -> None:
             set_meta(conn, DEMO_SEED_KEY, "seeded")
         else:
             _backfill_demo_data(conn)
+        # 种子数据也补 embedding_ref（_migrate 早于种子执行）
+        conn.execute(
+            "UPDATE kb_chunks SET embedding_ref ="
+            " 'local:' || doc_id || ':v' || version || ':' || chunk_no"
+            " WHERE embedding_ref = '' OR embedding_ref IS NULL"
+        )
         conn.commit()
     finally:
         conn.close()
@@ -454,6 +496,20 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("drafts", "sent_by", "ALTER TABLE drafts ADD COLUMN sent_by TEXT"),
         ("drafts", "sent_channel",
          "ALTER TABLE drafts ADD COLUMN sent_channel TEXT NOT NULL DEFAULT ''"),
+        ("drafts", "scenario",
+         "ALTER TABLE drafts ADD COLUMN scenario TEXT NOT NULL DEFAULT 'query'"),
+        ("exception_events", "return_reason",
+         "ALTER TABLE exception_events ADD COLUMN return_reason TEXT NOT NULL DEFAULT ''"),
+        ("exception_events", "routed_at",
+         "ALTER TABLE exception_events ADD COLUMN routed_at TEXT"),
+        ("exception_events", "route_rule",
+         "ALTER TABLE exception_events ADD COLUMN route_rule TEXT NOT NULL DEFAULT ''"),
+        ("kb_chunks", "embedding_ref",
+         "ALTER TABLE kb_chunks ADD COLUMN embedding_ref TEXT NOT NULL DEFAULT ''"),
+        ("audit_logs", "before_hash",
+         "ALTER TABLE audit_logs ADD COLUMN before_hash TEXT NOT NULL DEFAULT ''"),
+        ("audit_logs", "after_hash",
+         "ALTER TABLE audit_logs ADD COLUMN after_hash TEXT NOT NULL DEFAULT ''"),
     ):
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -497,6 +553,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
             " VALUES (?,?,?,?, 'TMS-历史', '', 50, 1, ?, ?)",
             (f"lnk_{row[0]}", row[1], row[0], row[2], row[3], row[4]),
         )
+
+    # 老库回填：切片补 embedding_ref（本地检索不依赖向量库，但要留引用位）
+    conn.execute(
+        "UPDATE kb_chunks SET embedding_ref ="
+        " 'local:' || doc_id || ':v' || version || ':' || chunk_no"
+        " WHERE embedding_ref = '' OR embedding_ref IS NULL"
+    )
 
     # 老库升级：先补演示干线（仅当表为空时，避免删掉的干线在重启后复活），
     # 再把历史数据里出现过的其它线路名收进 lanes

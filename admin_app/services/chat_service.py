@@ -27,6 +27,25 @@ from .audit_log import log as audit
 QUESTION_MAX = 2000
 HISTORY_PAIRS = 6
 RATE_LIMIT_PER_MIN = 10
+
+# docs/02 §7：这些场景停止自动建议（只在带运单上下文时生效，纯规则问答不受影响）
+STOP_RULES = [
+    ("STOP_ADDRESS_CHANGE", ("改地址", "改址", "地址变更"), "客户改地址"),
+    ("STOP_GPS_WEAK", ("弱网", "GPS", "定位漂移", "无信号"), "GPS 弱网/定位异常"),
+    ("STOP_RECEIPT_DELAY", ("回执延迟", "回执超时", "没回执", "回执未回"), "回执延迟"),
+]
+
+
+def stop_advice(question: str) -> dict | None:
+    for code, keywords, label in STOP_RULES:
+        hits = [keyword for keyword in keywords if keyword in question]
+        if hits:
+            return {
+                "reason_code": code,
+                "message": f"已停止自动建议：{label}。请人工接手处置，并记录接手人与确认时间。",
+                "matched_terms": hits,
+            }
+    return None
 _TYPEWRITER_SLICE = 24
 
 # 首页引导问题：都来自演示规则文档里的真实条款，点了就能看到引用
@@ -568,8 +587,10 @@ def stream_turn(
                         "shipment": _shipment_payload(shipment_info)})
         yield ("status", {"stage": "retrieving", "label": "正在检索规则…"})
 
-        # ---- 1. 红线闸门：命中就绝不调用模型 ----
+        # ---- 1. 红线闸门 + 停止自动建议场景：命中就绝不调用模型 ----
         gate = agent_core.gate(question)
+        if not gate and shipment_no:
+            gate = stop_advice(question)
         system_prompt, prompt_version = active_prompt(conn)
 
         if gate:

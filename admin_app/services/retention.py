@@ -8,10 +8,14 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta
 
+import json
+import uuid
+
 from ..db import now_iso
 from .audit_log import log as audit
 
 DEFAULT_DAYS = 90
+APPROVER_ROLES = {"auditor", "sys_admin"}
 
 
 def purge(conn: sqlite3.Connection, actor: dict | None, days: int = DEFAULT_DAYS) -> dict:
@@ -56,3 +60,89 @@ def purge(conn: sqlite3.Connection, actor: dict | None, days: int = DEFAULT_DAYS
               f"截止 {cutoff}")
         conn.commit()
     return result
+
+
+# ---------------------------------------------------------------------------
+# 合规确认：申请 → 审批 → 执行
+# ---------------------------------------------------------------------------
+
+
+def request(conn: sqlite3.Connection, actor: dict, days: int = DEFAULT_DAYS,
+            note: str = "") -> tuple[bool, str, str]:
+    pending = conn.execute(
+        "SELECT COUNT(*) FROM retention_requests WHERE status='pending'"
+    ).fetchone()[0]
+    if pending:
+        return False, "已有待审批的清理申请，请先处理", ""
+
+    request_id = f"rr_{uuid.uuid4().hex[:10]}"
+    conn.execute(
+        "INSERT INTO retention_requests"
+        " (id, days, status, requested_by, requested_at, note)"
+        " VALUES (?,?, 'pending', ?,?,?)",
+        (request_id, days, actor["id"], now_iso(), (note or "").strip()[:200]),
+    )
+    conn.commit()
+    audit(conn, actor, "retention.request", "retention", request_id,
+          f"申请清理 {days} 天前数据")
+    conn.commit()
+    return True, "已提交清理申请，等待合规审批", request_id
+
+
+def list_requests(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
+    return [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM retention_requests ORDER BY requested_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    ]
+
+
+def approve(
+    conn: sqlite3.Connection, actor: dict, request_id: str,
+) -> tuple[bool, str]:
+    row = conn.execute(
+        "SELECT * FROM retention_requests WHERE id=? AND status='pending'", (request_id,)
+    ).fetchone()
+    if row is None:
+        return False, "申请不存在或已处理"
+    if actor["role"] not in APPROVER_ROLES:
+        return False, "只有安全与合规主管可以审批"
+    if actor["id"] == row["requested_by"]:
+        return False, "申请人不能审批自己的清理申请"
+
+    result = purge(conn, actor, row["days"])
+    conn.execute(
+        "UPDATE retention_requests SET status='approved', decided_by=?, decided_at=?,"
+        " result_json=? WHERE id=?",
+        (actor["id"], now_iso(), json.dumps(result, ensure_ascii=False), request_id),
+    )
+    conn.commit()
+    audit(conn, actor, "retention.approve", "retention", request_id,
+          f"批准并清理：消息 {result['messages']} / 日志 {result['logs']}")
+    conn.commit()
+    return True, (
+        f"已批准并清理：消息 {result['messages']} 条、日志 {result['logs']} 条"
+    )
+
+
+def reject(
+    conn: sqlite3.Connection, actor: dict, request_id: str, note: str = "",
+) -> tuple[bool, str]:
+    row = conn.execute(
+        "SELECT * FROM retention_requests WHERE id=? AND status='pending'", (request_id,)
+    ).fetchone()
+    if row is None:
+        return False, "申请不存在或已处理"
+    if actor["role"] not in APPROVER_ROLES:
+        return False, "只有安全与合规主管可以审批"
+    conn.execute(
+        "UPDATE retention_requests SET status='rejected', decided_by=?, decided_at=?,"
+        " note=? WHERE id=?",
+        (actor["id"], now_iso(), (note or "").strip()[:200], request_id),
+    )
+    conn.commit()
+    audit(conn, actor, "retention.reject", "retention", request_id, note or "驳回")
+    conn.commit()
+    return True, "已驳回"

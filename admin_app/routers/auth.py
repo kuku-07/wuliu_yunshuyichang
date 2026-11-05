@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from .. import config
 from ..db import connect, now_iso
 from ..deps import current_user, get_db, require_api, require_page
+from ..deps import PERMS
 from ..security import create_access_token, verify_password
 from ..services.audit_log import log as audit
 from ..web import check_csrf, redirect, render
@@ -88,10 +89,13 @@ def login_submit(
         lanes = json.loads(row["lane_scopes"] or "[]")
     except Exception:
         lanes = []
-    token = create_access_token(row["id"], row["role"], lanes)
-    response = redirect("/admin/kb", ok="登录成功")
+    scopes = sorted(PERMS.get(row["role"], set()))
+    token = create_access_token(row["id"], row["role"], lanes, scopes=scopes)
+    target = "/portal" if row["role"] in {"customer", "carrier"} else "/admin/kb"
+    response = redirect(target, ok="登录成功")
     response.set_cookie(
         config.COOKIE_NAME, token, httponly=True, samesite="strict",
+        secure=config.COOKIE_SECURE,
         max_age=config.TOKEN_TTL_MINUTES * 60, path="/",
     )
     return response
@@ -126,7 +130,10 @@ def refresh(
     if not check_csrf(request, submitted):
         raise HTTPException(status_code=403, detail="页面已过期，请刷新后重试")
 
-    token = create_access_token(user["id"], user["role"], user.get("lanes") or [])
+    token = create_access_token(
+        user["id"], user["role"], user.get("lanes") or [],
+        scopes=sorted(PERMS.get(user["role"], set())),
+    )
     audit(db, user, "auth_refresh", "admin_user", user["id"], "续期会话",
           getattr(request.state, "request_id", ""))
     db.commit()

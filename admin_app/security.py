@@ -65,13 +65,17 @@ def _b64decode(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + padding)
 
 
-def create_access_token(subject: str, role: str, lanes: list[str], ttl_minutes: int | None = None) -> str:
-    """签发 HS256 JWT；role 仅用于展示，真实权限每次从数据库取。"""
+def create_access_token(
+    subject: str, role: str, lanes: list[str], ttl_minutes: int | None = None,
+    scopes: list[str] | None = None,
+) -> str:
+    """签发 HS256 JWT；role/scopes 仅用于展示与前端，真实权限每次从数据库取。"""
     now = int(time.time())
     payload: dict[str, Any] = {
         "sub": subject,
         "role": role,
         "lanes": lanes,
+        "scopes": sorted(scopes or []),
         "iat": now,
         "exp": now + (ttl_minutes or config.TOKEN_TTL_MINUTES) * 60,
         "jti": secrets.token_hex(8),
@@ -183,3 +187,15 @@ def strip_injection(text: str) -> tuple[str, int]:
         else:
             lines.append(line)
     return "\n".join(lines), hits
+
+
+def object_hash(value) -> str:
+    """对象哈希：用于审计里的变更前后指纹。"""
+    import hashlib
+    import json as _json
+
+    if isinstance(value, (dict, list)):
+        payload = _json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    else:
+        payload = "" if value is None else str(value)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]

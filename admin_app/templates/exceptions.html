@@ -12,12 +12,20 @@
         多异常聚集（≥2 条未关闭）。误报率 = 误报 /（确认 + 误报）。
       </p>
     </div>
-    {% if can('users:manage') %}
-    <form method="post" action="/admin/exceptions/import" class="inline-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-ghost btn-sm" type="submit">导入 TMS 样本</button>
-    </form>
-    {% endif %}
+    <div class="inline-actions">
+      {% if can('ops:act') %}
+      <form method="post" action="/admin/exceptions/route" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost btn-sm" type="submit">自动路由未指派</button>
+      </form>
+      {% endif %}
+      {% if can('users:manage') %}
+      <form method="post" action="/admin/exceptions/import" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost btn-sm" type="submit">导入 TMS 样本</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
 
   <div class="table-wrap">
@@ -98,6 +106,7 @@
             {% else %}<span class="badge badge-pending">待受理</span>{% endif %}
             {% if e.state.first_overdue %}<div class="muted small">首响超时</div>{% endif %}
             {% if e.state.resolve_overdue %}<div class="muted small">处置超时</div>{% endif %}
+            {% if e.return_reason %}<div class="muted small">退回：{{ e.return_reason }}</div>{% endif %}
           </td>
           <td class="muted">{{ e.accepted_at|fmt_dt if e.accepted_at else '-' }}</td>
           <td>
@@ -113,6 +122,7 @@
               <form method="post" action="/admin/exceptions/{{ e.id }}/close" class="inline-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="text" name="note" placeholder="处置结论" class="mini-input">
+                <input type="text" name="return_reason" placeholder="退回原因（可选）" class="mini-input">
                 <button class="btn btn-ghost btn-sm" type="submit">关闭</button>
               </form>
               {% endif %}
@@ -125,6 +135,18 @@
                 </select>
                 <button class="btn btn-ghost btn-sm" type="submit">指派</button>
               </form>
+              {% if e.accepted_at %}
+              <form method="post" action="/admin/exceptions/{{ e.id }}/handover" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <select name="handler" class="mini-input">
+                  {% for h in handlers %}
+                  <option value="{{ h.id }}">{{ h.name }}</option>
+                  {% endfor %}
+                </select>
+                <input type="text" name="note" placeholder="转交说明" class="mini-input">
+                <button class="btn btn-ghost btn-sm" type="submit">转交</button>
+              </form>
+              {% endif %}
             </div>
             {% else %}<span class="muted small">只读</span>{% endif %}
           </td>
