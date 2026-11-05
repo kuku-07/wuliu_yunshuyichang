@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block title %}一线问答{% endblock %}
+{% block page_title %}一线问答{% endblock %}
+
+{% block content %}
+<div class="chat-shell"
+     data-session="{{ session.id }}"
+     data-csrf="{{ csrf_token }}"
+     data-max="{{ question_max }}">
+
+  <div class="chat-head">
+    <div class="chat-head-left">
+      <span class="chat-lane">线路 · {{ lanes[0] }}</span>
+      <span class="muted mono">{{ session.id }}</span>
+    </div>
+    <div class="chat-head-right">
+      <span class="chat-state" id="chat-state">空闲</span>
+      <form method="post" action="/admin/chat/session">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost btn-sm" type="submit">新建会话</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="chat-log" id="chat-log">
+    {% for m in messages %}
+      {% if m.role == 'user' %}
+      <div class="msg msg-user"><div class="bubble">{{ m.content }}</div></div>
+      {% else %}
+      <div class="msg msg-bot">
+        <div class="bubble">
+          {% if m.status == 'takeover' %}
+            <div class="banner banner-warn">已转人工接管，系统不提供自动建议</div>
+            <div class="answer-body">{{ m.content }}</div>
+            <div class="muted small">原因码 · {{ m.intent }}</div>
+          {% else %}
+            <div class="answer-body">{{ m.content }}</div>
+            {% if m.citations %}
+            <details class="cites">
+              <summary>引用来源（{{ m.citations|length }}）</summary>
+              {% for c in m.citations %}
+              <div class="cite">
+                <div class="cite-head">{{ c.doc_title }} · v{{ c.doc_version }} · {{ c.section }}</div>
+                <div class="muted small">生效 {{ c.effective_from or '-' }} · 适用 {{ c.lane_scope }}</div>
+                <div class="cite-quote">{{ c.quote }}</div>
+              </div>
+              {% endfor %}
+            </details>
+            {% else %}
+            <div class="muted small">未命中规则文档，需人工确认</div>
+            {% endif %}
+          {% endif %}
+          <div class="disclaimer">仅内部参考，不对外发送</div>
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <div class="chat-compose">
+    <textarea id="q" rows="3" maxlength="{{ question_max }}"
+              placeholder="问规则与口径，例如：客户临时改地址，异常应归为哪一类？"></textarea>
+    <div class="compose-foot">
+      <span class="muted small" id="counter">0/{{ question_max }}</span>
+      <span class="compose-note">回答仅供内部参考，不对外发送</span>
+      <button class="btn btn-primary" id="send" type="button">发送</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var shell = document.querySelector(".chat-shell");
+  var log = document.getElementById("chat-log");
+  var input = document.getElementById("q");
+  var sendBtn = document.getElementById("send");
+  var counter = document.getElementById("counter");
+  var stateEl = document.getElementById("chat-state");
+
+  var SESSION = shell.dataset.session;
+  var CSRF = shell.dataset.csrf;
+  var MAX = parseInt(shell.dataset.max, 10) || 2000;
+
+  var busy = false;
+  var raf = null;
+  var buffer = "";
+  var bodyEl = null;
+  var current = null;
+
+  function setState(text) { stateEl.textContent = text; }
+  function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+  input.addEventListener("input", function () {
+    counter.textContent = input.value.length + "/" + MAX;
+  });
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
+  });
+  sendBtn.addEventListener("click", submit);
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function addUser(text) {
+    var wrap = el("div", "msg msg-user");
+    wrap.appendChild(el("div", "bubble", text));
+    log.appendChild(wrap);
+    scrollDown();
+  }
+
+  function addBot() {
+    var wrap = el("div", "msg msg-bot");
+    var bubble = el("div", "bubble");
+    var skeleton = el("div", "skeleton", "正在检索规则…");
+    bubble.appendChild(skeleton);
+    wrap.appendChild(bubble);
+    log.appendChild(wrap);
+    scrollDown();
+    current = { wrap: wrap, bubble: bubble, skeleton: skeleton, body: null, extras: [] };
+  }
+
+  function ensureBody() {
+    if (!current) addBot();
+    if (current.body) return current.body;
+    if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+    bodyEl = el("div", "answer-body");
+    current.bubble.appendChild(bodyEl);
+    current.body = bodyEl;
+    return bodyEl;
+  }
+
+  function keepBottom(node) {
+    // 引用面板/横幅要插在正文之后、免责声明之前
+    var disclaimer = current.bubble.querySelector(".disclaimer");
+    if (disclaimer) current.bubble.insertBefore(node, disclaimer);
+    else current.bubble.appendChild(node);
+    scrollDown();
+  }
+
+  function pump() {
+    if (!bodyEl) { raf = null; return; }
+    if (!buffer.length) { raf = null; return; }
+    var step = buffer.length > 200 ? buffer.length : 3;
+    bodyEl.textContent += buffer.slice(0, step);
+    buffer = buffer.slice(step);
+    scrollDown();
+    raf = requestAnimationFrame(pump);
+  }
+
+  function onDelta(text) {
+    ensureBody();
+    buffer += text;
+    if (!raf) raf = requestAnimationFrame(pump);
+  }
+
+  function addDisclaimer() {
+    if (!current) return;
+    if (!current.bubble.querySelector(".disclaimer")) {
+      current.bubble.appendChild(el("div", "disclaimer", "仅内部参考，不对外发送"));
+    }
+  }
+
+  function renderCitations(items) {
+    if (!current) return;
+    if (!items || !items.length) {
+      keepBottom(el("div", "muted small", "未命中规则文档，需人工确认"));
+      return;
+    }
+    var box = el("details", "cites");
+    box.appendChild(el("summary", "", "引用来源（" + items.length + "）"));
+    items.forEach(function (c) {
+      var item = el("div", "cite");
+      item.appendChild(el("div", "cite-head",
+        c.doc_title + " · v" + c.version + " · " + c.section));
+      item.appendChild(el("div", "muted small",
+        "生效 " + (c.effective_from || "-") + " · 适用 " + (c.lane_scope || "-")));
+      item.appendChild(el("div", "cite-quote", c.quote));
+      box.appendChild(item);
+    });
+    keepBottom(box);
+    box.open = true;
+  }
+
+  function onTakeover(data) {
+    if (!current) addBot();
+    if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+    keepBottom(el("div", "banner banner-warn", "已转人工接管，系统不提供自动建议"));
+    ensureBody().textContent = data.message || "";
+    keepBottom(el("div", "muted small", "原因码 · " + data.reason_code +
+      (data.matched_terms && data.matched_terms.length
+        ? "（命中：" + data.matched_terms.join("、") + "）" : "")));
+    addDisclaimer();
+  }
+
+  function onGuardrail(data) {
+    if (!current) return;
+    if (data && data.needs_review) {
+      keepBottom(el("div", "banner banner-review", "该回答未通过自动校验，请人工核对后再使用"));
+      if (data.violations && data.violations.length) {
+        keepBottom(el("div", "muted small", "校验项：" + data.violations.join("；")));
+      }
+    }
+  }
+
+  function onDone(data) {
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    if (bodyEl && buffer) { bodyEl.textContent += buffer; buffer = ""; }
+    addDisclaimer();
+    if (data && data.latency_ms != null && current && current.body && !data.takeover) {
+      keepBottom(el("div", "muted small",
+        "耗时 " + data.latency_ms + "ms · 提示词 " + (data.prompt_version || "-") +
+        " · " + (data.model || "-")));
+    }
+  }
+
+  function onError(data) {
+    if (!current) addBot();
+    if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+    var box = el("div", "banner banner-error");
+    box.textContent = (data.message || "本次未生成回答") +
+      (data.request_id ? "（编号 " + data.request_id + "）" : "");
+    keepBottom(box);
+  }
+
+  function handleEvent(raw) {
+    var ev = null, data = null;
+    raw.split("\n").forEach(function (line) {
+      if (line.indexOf("event: ") === 0) ev = line.slice(7).trim();
+      else if (line.indexOf("data: ") === 0) {
+        try { data = JSON.parse(line.slice(6)); } catch (e) { data = null; }
+      }
+    });
+    if (!ev) return;
+
+    switch (ev) {
+      case "meta":
+        current.meta = data;
+        break;
+      case "status":
+        if (data.stage === "retrieving") { setState("检索中"); }
+        else if (data.stage === "generating") { setState("生成中"); ensureBody(); }
+        else if (data.stage === "verifying") { setState("校验中"); }
+        else if (data.stage === "gated") { setState("接管判断"); }
+        break;
+      case "delta":
+        onDelta(data.text || "");
+        break;
+      case "citations":
+        renderCitations(data.items);
+        break;
+      case "takeover":
+        onTakeover(data);
+        setState("已接管");
+        break;
+      case "guardrail":
+        onGuardrail(data);
+        break;
+      case "done":
+        onDone(data);
+        // 接管是终态，不能被 done 覆盖成「空闲」
+        if (!(data && data.takeover)) setState("空闲");
+        break;
+      case "error":
+        onError(data);
+        setState("出错");
+        break;
+    }
+  }
+
+  function finish() {
+    busy = false;
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+    if (stateEl.textContent !== "已接管" && stateEl.textContent !== "出错") setState("空闲");
+  }
+
+  async function submit() {
+    var text = input.value.trim();
+    if (!text || busy) return;
+    if (text.length > MAX) { alert("问题超过 " + MAX + " 字"); return; }
+
+    busy = true;
+    sendBtn.disabled = true;
+    input.disabled = true;
+    input.value = "";
+    counter.textContent = "0/" + MAX;
+    setState("提交中");
+
+    addUser(text);
+    buffer = "";
+    bodyEl = null;
+    addBot();
+
+    var fd = new FormData();
+    fd.append("question", text);
+    fd.append("session_id", SESSION);
+    fd.append("csrf_token", CSRF);
+
+    try {
+      var resp = await fetch("/admin/api/chat/stream", { method: "POST", body: fd });
+      if (!resp.ok) {
+        var payload = {};
+        try { payload = await resp.json(); } catch (e) {}
+        if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+        onError(payload);
+        setState("出错");
+        finish();
+        return;
+      }
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder("utf-8");
+      var buf = "";
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buf += decoder.decode(chunk.value, { stream: true });
+        var idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          var raw = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          handleEvent(raw);
+        }
+      }
+    } catch (err) {
+      onError({ message: "连接中断：" + err });
+      setState("出错");
+    } finally {
+      if (raf) { cancelAnimationFrame(raf); raf = null; }
+      if (bodyEl && buffer) { bodyEl.textContent += buffer; buffer = ""; }
+      finish();
+    }
+  }
+
+  scrollDown();
+  input.focus();
+})();
+</script>
+{% endblock %}

@@ -20,6 +20,7 @@
 
     <nav class="nav">
       <div class="nav-label">规则与问答</div>
+      <a class="nav-item {% if request.url.path.startswith('/admin/chat') %}active{% endif %}" href="/admin/chat">一线问答</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/kb') %}active{% endif %}" href="/admin/kb">规则知识库</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/prompts') %}active{% endif %}" href="/admin/prompts">提示词模板</a>
       <div class="nav-label">监督与追溯</div>
@@ -59,5 +60,6 @@
     </div>
   </main>
 </div>
+{% block scripts %}{% endblock %}
 </body>
 </html>

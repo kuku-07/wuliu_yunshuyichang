@@ -1,6 +1,6 @@
 # 运输异常与签收协作智能体系统
 
-> 当前进度：需求与接口设计（v0.1）+ 阶段 1 可运行原型 + 阶段 3 管理后台。阶段 2（`/chat` SSE）只有设计，尚未实现。
+> 当前进度：需求与接口设计（v0.1）+ 阶段 1 可运行原型 + 阶段 2 一线问答（网页 + SSE）+ 阶段 3 管理后台。
 
 ## 一句话定位
 
@@ -28,6 +28,32 @@
 python prototype/phase1_cli.py --selftest     # 离线自检，不需要 API Key
 python prototype/phase1_cli.py                # 交互问答
 ```
+
+## 阶段 2 一线问答（可运行，网页版）
+
+| 文件 | 内容 |
+| --- | --- |
+| [admin_app/routers/chat.py](admin_app/routers/chat.py) | `/admin/chat` 页面 + `/admin/api/chat/stream` SSE 接口 |
+| [admin_app/services/chat_service.py](admin_app/services/chat_service.py) | 会话、落库、SSE 事件编排（红线 → 检索 → 生成 → 校验） |
+| [admin_app/services/agent_core.py](admin_app/services/agent_core.py) | 复用阶段 1 的检索/闸门/护栏，数据源换成 SQLite 知识库 |
+| [admin_app/templates/chat.html](admin_app/templates/chat.html) | 单页聊天界面（打字机、引用面板、接管/复核横幅） |
+| [scripts/smoke_chat.py](scripts/smoke_chat.py) | 13 项验收测试（对照 docs/04 第 6 节） |
+
+```powershell
+.\run_admin.ps1                                  # 登录后左侧「一线问答」
+$env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
+```
+
+要点：
+
+- 事件协议与错误码遵循 [docs/04-聊天接口设计.md](docs/04-聊天接口设计.md)；
+  鉴权改用后台已有的 Cookie 会话，不再单独引入 Bearer Token。
+- 检索的是**已发布**的规则切片（`kb_chunks.is_active=1`），后台改规则后对话立刻生效。
+- 提示词取后台「提示词模板」的**已发布版本**，不是硬编码常量。
+- 红线在调用模型之前拦截：命中时 0 次模型调用、0 条 `delta`，只发 `takeover`。
+- 每次问答都落 `messages` / `citations` / `audit_logs`，「对话审计」页看到的是真实会话。
+- 没有 `LLM_API_KEY` 时走离线抽取（`OfflineExtractiveLLM`），只验证检索与引用完整性；
+  配置 `LLM_PROVIDER=openai_compatible` + `LLM_API_KEY` 后才由真模型生成。
 
 ## 阶段 3 管理后台（可运行）
 

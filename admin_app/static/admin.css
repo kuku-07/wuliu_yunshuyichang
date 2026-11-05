@@ -254,3 +254,164 @@ pre.locked {
   .main { padding: 16px; }
   .form-grid, .compare { grid-template-columns: 1fr; }
 }
+/* ---------- 阶段 2 一线问答 ---------- */
+.chat-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 196px);
+  min-height: 520px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fcfcfe;
+  flex-wrap: wrap;
+}
+.chat-head-left, .chat-head-right { display: flex; align-items: center; gap: 10px; }
+.chat-head form { margin: 0; }
+.chat-lane {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.chat-state {
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  min-width: 58px;
+  text-align: center;
+}
+
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: linear-gradient(180deg, #fbfcff 0%, #f7f9fd 100%);
+}
+
+.msg { display: flex; }
+.msg-user { justify-content: flex-end; }
+.msg-bot { justify-content: flex-start; }
+.msg .bubble {
+  max-width: 78%;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.msg-user .bubble {
+  background: var(--primary-soft);
+  border-color: #dcd9fb;
+  color: #312e81;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.answer-body { white-space: pre-wrap; word-break: break-word; }
+.answer-body:empty { display: none; }
+
+.banner {
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 10px;
+  border: 1px solid transparent;
+}
+.banner-warn { background: var(--amber-soft); border-color: #fde68a; color: var(--amber); }
+.banner-review { background: var(--amber-soft); border-color: #fde68a; color: var(--amber); margin: 10px 0 0; }
+.banner-error { background: var(--red-soft); border-color: #fecaca; color: var(--red); margin-top: 10px; }
+
+.cites { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.cites summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  list-style: none;
+}
+.cites summary::-webkit-details-marker { display: none; }
+.cites summary::before { content: "▸ "; }
+.cites[open] summary::before { content: "▾ "; }
+.cite {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #fafbff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.cite-head { font-size: 12px; font-weight: 600; color: #374151; }
+.cite-quote { font-size: 12px; color: #4b5563; margin-top: 4px; }
+
+.disclaimer {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+}
+
+.chat-compose {
+  border-top: 1px solid var(--line);
+  padding: 12px 16px 14px;
+  background: #fff;
+}
+.chat-compose textarea {
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+}
+.chat-compose textarea:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(79, 70, 229, .08); }
+.compose-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+.compose-note { color: var(--muted); font-size: 12px; }
+
+.skeleton {
+  color: var(--muted);
+  font-size: 13px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e9ecf5 37%, #f3f4f6 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+@keyframes shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; }
+.small { font-size: 12px; }
+
+@media (max-width: 860px) {
+  .chat-shell { height: calc(100vh - 240px); }
+  .msg .bubble { max-width: 92%; }
+}

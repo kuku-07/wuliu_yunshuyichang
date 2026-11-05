@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, db
 from .deps import Forbidden, LoginRequired
-from .routers import audit, auth, kb, prompts
+from .routers import audit, auth, chat, kb, prompts
+from .services import agent_core
 from .web import render
 
 logger = logging.getLogger("admin")
@@ -34,6 +35,15 @@ async def lifespan(app: FastAPI):
     db.init_db()
     if config.SECRET_KEY.startswith("dev-only"):
         logger.warning("当前使用默认 SECRET_KEY，仅限本地演示")
+    # 预热分词与检索索引：阶段 2 首个问题不必再等一遍加载
+    try:
+        conn = db.connect()
+        try:
+            agent_core.get_retriever(conn)
+        finally:
+            conn.close()
+    except Exception:  # 预热失败不影响启动，首个提问时还会再试
+        logger.warning("检索预加载失败，首个提问可能稍慢", exc_info=True)
     yield
 
 
@@ -100,6 +110,7 @@ def root():
 
 
 app.include_router(auth.router)
+app.include_router(chat.router)
 app.include_router(kb.router)
 app.include_router(prompts.router)
 app.include_router(audit.router)
