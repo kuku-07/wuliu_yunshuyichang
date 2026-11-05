@@ -106,6 +106,10 @@ def save(
     lane = (lane_scope or "").strip()
     if not lane:
         return False, "线路不能为空：授权预检要靠它判断是否跨线"
+    from .lanes import name_exists
+
+    if not name_exists(conn, lane, active_only=True):
+        return False, f"线路「{lane}」不存在或已停用，请先在「干线管理」里新建"
     if status not in STATUS_TEXT:
         return False, f"运单状态不合法：{status}"
 

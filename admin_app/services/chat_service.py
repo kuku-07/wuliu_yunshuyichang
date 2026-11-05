@@ -59,15 +59,13 @@ def default_lane(user: dict) -> str:
 
 
 def available_lanes(conn: sqlite3.Connection, user: dict) -> list[str]:
-    """可选线路 = 系统已知线路（运单 / 规则 / 用户范围）的并集。
+    """可选线路 = 干线管理里启用的干线 ∪ 该账号的线路范围。"""
+    from .lanes import active_names
 
-    目前 `lane_scopes` 只用于取默认值，没有强制校验——系统还没有用户管理页，
-    真要做线路级授权时需要在这里收紧。
-    """
-    from .shipments import known_lanes
-
-    lanes = set(known_lanes(conn))
+    lanes = set(active_names(conn))
     lanes.update(lane for lane in (user.get("lanes") or []) if lane)
+    if not lanes:
+        lanes.add(default_lane(user))
     return sorted(lanes)
 
 

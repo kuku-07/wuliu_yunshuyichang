@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Form, Request
 
 from ..deps import get_db, require_page
+from ..services import lanes as lane_service
 from ..services import shipments as shipment_service
 from ..web import check_csrf, redirect, render
 
@@ -29,7 +30,7 @@ def shipments_page(
         request, user, "shipments.html",
         shipments=rows,
         editing=editing,
-        lanes=shipment_service.known_lanes(db),
+        lanes=lane_service.list_lanes(db, include_disabled=False),
         status_options=shipment_service.status_options(),
         keyword=keyword,
         status_filter=status,

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}干线管理{% endblock %}
+{% block page_title %}干线管理{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>干线列表</h2>
+      <p class="role-note">
+        干线是规则、运单、授权的归属单位。停用后不再出现在上传与登记的下拉里，但历史数据仍然保留。
+      </p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>干线名称</th><th>地区</th><th>状态</th>
+          <th>规则</th><th>运单</th><th>授权</th><th>备注</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lane in lanes %}
+        <tr>
+          <td><strong>{{ lane.name }}</strong></td>
+          <td>{{ lane.region or '-' }}</td>
+          <td>
+            {% if lane.status == 'active' %}<span class="badge badge-active">启用</span>
+            {% else %}<span class="badge badge-offline">停用</span>{% endif %}
+          </td>
+          <td class="num">{{ lane.doc_count }}</td>
+          <td class="num">{{ lane.shipment_count }}</td>
+          <td class="num">{{ lane.grant_count }}</td>
+          <td class="muted small">{{ lane.note or '-' }}</td>
+          <td class="row-actions">
+            <form method="post" action="/admin/lanes/status" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="name" value="{{ lane.name }}">
+              {% if lane.status == 'active' %}
+              <input type="hidden" name="status" value="disabled">
+              <button class="btn btn-ghost btn-sm" type="submit">停用</button>
+              {% else %}
+              <input type="hidden" name="status" value="active">
+              <button class="btn btn-ghost btn-sm" type="submit">启用</button>
+              {% endif %}
+            </form>
+            <form method="post" action="/admin/lanes/delete" class="inline-form"
+                  onsubmit="return confirm('删除干线「{{ lane.name }}」？被规则/运单/授权引用时会被拒绝。');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="name" value="{{ lane.name }}">
+              <button class="btn btn-danger btn-sm" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="muted">还没有干线，先在下面新建一条。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>新建干线</h2>
+  <form method="post" action="/admin/lanes/create" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>干线名称
+      <input type="text" name="name" required maxlength="40"
+             placeholder="例如：试点干线-华南">
+    </label>
+    <label>所属地区
+      <input type="text" name="region" required maxlength="20"
+             placeholder="例如：华南">
+    </label>
+    <label>备注（可选）
+      <input type="text" name="note" maxlength="100" placeholder="例如：广州、深圳、东莞">
+    </label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">新建干线</button>
+      <span class="muted">当前启用 {{ active_count }} 条</span>
+    </div>
+  </form>
+  <p class="role-note">
+    新建后即可在「上传规则」和「登记运单」的线路下拉里选到它；对话页的作业线路也会同步出现。
+  </p>
+</div>
+{% endblock %}

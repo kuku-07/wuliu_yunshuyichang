@@ -179,6 +179,15 @@ CREATE TABLE IF NOT EXISTS app_meta (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS lanes (
+    name       TEXT PRIMARY KEY,
+    region     TEXT NOT NULL DEFAULT '',
+    status     TEXT NOT NULL DEFAULT 'active',
+    note       TEXT NOT NULL DEFAULT '',
+    is_demo    INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS authorization_grants (
     id           TEXT PRIMARY KEY,
     user_id      TEXT NOT NULL,
@@ -319,6 +328,19 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for doc in DEMO_DOCS:
         conn.execute("UPDATE kb_documents SET is_demo=1 WHERE id=?", (doc["id"],))
 
+    # 老库升级：先补演示干线的地区，再把历史数据里出现过的其它线路名收进 lanes
+    _seed_lanes(conn, now_iso())
+    for row in conn.execute(
+        "SELECT DISTINCT lane_scope FROM kb_documents WHERE lane_scope <> ''"
+        " UNION SELECT DISTINCT lane_scope FROM shipments WHERE lane_scope <> ''"
+        " UNION SELECT DISTINCT lane_scope FROM authorization_grants WHERE lane_scope <> ''"
+    ):
+        conn.execute(
+            "INSERT OR IGNORE INTO lanes (name, region, status, note, is_demo, created_at)"
+            " VALUES (?, '', 'active', '由历史数据自动登记', 0, ?)",
+            (row[0], now_iso()),
+        )
+
 
 # ---------------------------------------------------------------------------
 # 演示数据（全部虚构）
@@ -406,6 +428,21 @@ DEMO_FLAG = (
 )
 
 
+DEMO_LANES = [
+    ("试点干线-华东", "华东", "上海、江苏、浙江、安徽"),
+    ("试点干线-华北", "华北", "北京、天津、河北"),
+]
+
+
+def _seed_lanes(conn: sqlite3.Connection, created: str) -> None:
+    for name, region, note in DEMO_LANES:
+        conn.execute(
+            "INSERT OR IGNORE INTO lanes (name, region, status, note, is_demo, created_at)"
+            " VALUES (?,?, 'active', ?, 1, ?)",
+            (name, region, note, created),
+        )
+
+
 def _seed_users(conn: sqlite3.Connection, created: str) -> None:
     for uid, no, name, role, lanes in DEMO_USERS:
         conn.execute(
@@ -489,6 +526,7 @@ def _seed(conn: sqlite3.Connection) -> None:
     """写入演示账号、规则、提示词与会话；所有内容均为虚构。"""
     created = now_iso()
     _seed_users(conn, created)
+    _seed_lanes(conn, created)
 
     # ---- 默认提示词 ----
     conn.execute(

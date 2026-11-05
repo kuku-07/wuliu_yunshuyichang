@@ -12,6 +12,7 @@ from ..db import now_iso
 from ..deps import get_db, require_api, require_page
 from ..security import mask_pii, sha256_text
 from ..services import kb as kb_service
+from ..services import lanes as lane_service
 from ..services.audit_log import log as audit
 from ..web import check_csrf, redirect, render
 
@@ -74,12 +75,10 @@ def upload_page(
     user=Depends(require_page("kb:edit")),
     db=Depends(get_db),
 ):
-    from ..services.shipments import known_lanes
-
     return render(
         request, user, "kb_upload.html",
         today=datetime.now().strftime("%Y-%m-%d"),
-        lanes=known_lanes(db),
+        lanes=lane_service.list_lanes(db, include_disabled=False),
     )
 
 
@@ -101,6 +100,11 @@ async def upload_submit(
     lane_scope = lane_scope.strip()
     if not title or not lane_scope:
         return redirect("/admin/kb/upload", err="标题与适用线路不能为空")
+    if not lane_service.name_exists(db, lane_scope, active_only=True):
+        return redirect(
+            "/admin/kb/upload",
+            err=f"干线「{lane_scope}」不存在或已停用，请先在「干线管理」里新建",
+        )
     if effective_from:
         try:
             datetime.strptime(effective_from, "%Y-%m-%d")

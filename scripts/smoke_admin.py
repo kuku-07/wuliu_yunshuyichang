@@ -216,9 +216,17 @@ def main() -> None:
         page = client.get("/admin/kb/upload")
         assert page.status_code == 200
         assert "试点干线-华北" in page.text
-        ok("系统管理员可进入上传页，线路可下拉可选可自填")
+        ok("系统管理员可进入上传页，线路来自干线管理")
 
         new_lane = "试点干线-华南"
+        lane_created = post(client, "/admin/lanes/create", {
+            "name": new_lane,
+            "region": "华南",
+            "note": "广州、深圳、东莞",
+        }, follow=True)
+        assert "已新建干线" in lane_created.text, lane_created.text[:300]
+        ok(f"系统管理员新建干线「{new_lane}」")
+
         body = (
             "# 华南试点规则\n\n"
             "## 1. 适用范围\n\n本规则适用于华南试点线路的整车运单。\n\n"

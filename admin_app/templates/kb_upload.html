@@ -21,11 +21,13 @@
       </label>
       <label class="field">
         <span>适用线路</span>
-        <input type="text" name="lane_scope" list="lane-options" value="试点干线-华东" required
-               placeholder="可直接输入新线路，例如 试点干线-华南">
-        <datalist id="lane-options">
-          {% for lane in lanes %}<option value="{{ lane }}"></option>{% endfor %}
-        </datalist>
+        <select name="lane_scope" required>
+          {% for lane in lanes %}
+          <option value="{{ lane.name }}">{{ lane.name }}（{{ lane.region or '未填地区' }}）</option>
+          {% else %}
+          <option value="">请先在「干线管理」新建干线</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="field">
         <span>生效日期（可选）</span>
@@ -44,6 +46,7 @@
     <div class="form-actions">
       <button class="btn btn-primary" type="submit">上传并生成草稿</button>
       <span class="muted">上传后状态为「草稿」，需提交审核、批准、发布后才生效。</span>
+      <a class="muted" href="/admin/lanes">没有合适的干线？去新建</a>
     </div>
   </form>
 </div>

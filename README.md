@@ -39,6 +39,7 @@ python prototype/phase1_cli.py                # 交互问答
 | [admin_app/templates/chat.html](admin_app/templates/chat.html) | 单页聊天界面（打字机、引用面板、接管/复核横幅） |
 | [scripts/smoke_chat.py](scripts/smoke_chat.py) | 24 项验收测试（对照 docs/04 第 6 节） |
 | [scripts/smoke_shipments.py](scripts/smoke_shipments.py) | 11 项运单登记测试 |
+| [scripts/smoke_lanes.py](scripts/smoke_lanes.py) | 12 项干线管理测试 |
 | [scripts/smoke_data.py](scripts/smoke_data.py) | 12 项演示数据删除 / 恢复测试 |
 
 ```powershell
@@ -66,7 +67,8 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
 - 对话首屏是引导态：标题 + 6 个可点的常见问题，点一下填入输入框，发送后自动收起。
 - 对话页左侧是会话栏：可新建、切换、删除会话（只能看到并操作自己的会话）。
 - 会话栏底部可切换**作业线路**：切换后检索范围与运单校验都按该线路走。
-  演示数据里有华东、华北两份规则（华北的延误阈值、回执时限、照片张数都不同），
+  干线在「干线管理」页维护（名称 + 地区），新建后规则上传、运单登记、对话下拉同步出现；
+  演示数据里有华东、华北、华南三份规则（延误阈值、回执时限、照片张数各不相同），
   切线路问同一个问题，引用会变成对应片区的文档。
 - 线路内检索**不会跨线路兜底**：某条线路没有生效规则时返回「未覆盖 + 需人工复核」，
   而不是拿别的片区的规则来回答。
