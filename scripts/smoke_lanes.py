@@ -104,9 +104,28 @@ def main() -> int:
     missing_region = post(admin, "/admin/lanes/create", {
         "name": "试点干线-西北", "region": "",
     })
-    if "地区不能为空" not in missing_region.text:
-        fail("地区必填", "未提示")
+    if "请选择所属地区" not in missing_region.text:
+        fail("地区必选", "未提示")
     ok("地区为空 → 拒绝")
+
+    # 名称不必带地区；地区是固定下拉
+    page = admin.get("/admin/lanes")
+    for region in ("华北", "华南", "华中", "华东", "西南", "西北", "东北", "西藏", "新疆", "港澳"):
+        if region not in page.text:
+            fail("地区下拉包含固定选项", region)
+    ok("所属地区为固定下拉（10 个地区）")
+
+    short_name = post(admin, "/admin/lanes/create", {"name": "华南快线", "region": "华南"})
+    if "已新建干线" not in short_name.text:
+        fail("干线名称可以不带地区", "新建失败")
+    if "华南快线（华南）" not in admin.get("/admin/chat").text:
+        fail("对话下拉显示「名称（地区）」", "未显示")
+    ok("名称不带地区也能新建，下拉显示为「名称（地区）」")
+
+    bad_region = post(admin, "/admin/lanes/create", {"name": "测试线", "region": "火星"})
+    if "不在可选范围" not in bad_region.text:
+        fail("非法地区被拒绝", "未拦截")
+    ok("非法地区 → 拒绝")
 
     # ---- 3. 新干线出现在三个下拉里 ----
     for path, label in (

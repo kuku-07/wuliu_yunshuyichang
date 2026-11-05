@@ -18,6 +18,9 @@ NAME_MAX = 40
 REGION_MAX = 20
 VALID_STATUS = {"active", "disabled"}
 
+# 固定地区选项：干线的所属大区，不允许自由输入，避免出现「华东 / 华东区 / 华 东」这类脏数据
+REGIONS = ["华北", "华南", "华中", "华东", "西南", "西北", "东北", "西藏", "新疆", "港澳"]
+
 
 def list_lanes(conn: sqlite3.Connection, include_disabled: bool = True) -> list[dict]:
     sql = (
@@ -42,6 +45,17 @@ def active_names(conn: sqlite3.Connection) -> list[str]:
     ]
 
 
+def options(conn: sqlite3.Connection, extra: tuple[str, ...] | list[str] = ()) -> list[dict]:
+    """下拉选项：启用的干线（含地区），再补上用户范围里有、但表里没登记的名字。"""
+    rows = list_lanes(conn, include_disabled=False)
+    known = {row["name"] for row in rows}
+    for name in extra:
+        if name and name not in known:
+            rows.append({"name": name, "region": "", "status": "active", "note": ""})
+            known.add(name)
+    return sorted(rows, key=lambda row: ((row.get("region") or "zz"), row["name"]))
+
+
 def get(conn: sqlite3.Connection, name: str) -> dict | None:
     row = conn.execute("SELECT * FROM lanes WHERE name=?", ((name or "").strip(),)).fetchone()
     return dict(row) if row else None
@@ -64,9 +78,9 @@ def create(
     if len(name) > NAME_MAX:
         return False, f"干线名称过长（上限 {NAME_MAX} 字）"
     if not region:
-        return False, "地区不能为空"
-    if len(region) > REGION_MAX:
-        return False, f"地区过长（上限 {REGION_MAX} 字）"
+        return False, "请选择所属地区"
+    if region not in REGIONS:
+        return False, f"地区「{region}」不在可选范围内"
     if get(conn, name):
         return False, f"干线「{name}」已存在"
 

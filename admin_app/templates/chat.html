@@ -42,7 +42,7 @@
           <span>作业线路</span>
           <select name="lane_scope" onchange="this.form.submit()">
             {% for lane in lanes %}
-            <option value="{{ lane }}" {% if lane == session.lane_scope %}selected{% endif %}>{{ lane }}</option>
+            <option value="{{ lane.name }}" {% if lane.name == session.lane_scope %}selected{% endif %}>{{ lane.name }}{% if lane.region %}（{{ lane.region }}）{% endif %}</option>
             {% endfor %}
           </select>
         </label>

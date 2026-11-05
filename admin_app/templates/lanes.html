@@ -68,11 +68,14 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>干线名称
       <input type="text" name="name" required maxlength="40"
-             placeholder="例如：试点干线-华南">
+             placeholder="例如：试点干线 / 华南快线（不必带地区）">
     </label>
     <label>所属地区
-      <input type="text" name="region" required maxlength="20"
-             placeholder="例如：华南">
+      <select name="region" required>
+        {% for region in regions %}
+        <option value="{{ region }}">{{ region }}</option>
+        {% endfor %}
+      </select>
     </label>
     <label>备注（可选）
       <input type="text" name="note" maxlength="100" placeholder="例如：广州、深圳、东莞">

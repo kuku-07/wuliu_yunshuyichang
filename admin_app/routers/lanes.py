@@ -19,6 +19,7 @@ def lanes_page(
     return render(
         request, user, "lanes.html",
         lanes=lane_service.list_lanes(db),
+        regions=lane_service.REGIONS,
         active_count=len(lane_service.active_names(db)),
     )
 

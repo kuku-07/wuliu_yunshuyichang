@@ -59,14 +59,13 @@ def default_lane(user: dict) -> str:
 
 
 def available_lanes(conn: sqlite3.Connection, user: dict) -> list[str]:
-    """可选线路 = 干线管理里启用的干线 ∪ 该账号的线路范围。"""
-    from .lanes import active_names
+    """可选线路名 = 干线管理里启用的干线 ∪ 该账号的线路范围。"""
+    from .lanes import options
 
-    lanes = set(active_names(conn))
-    lanes.update(lane for lane in (user.get("lanes") or []) if lane)
-    if not lanes:
-        lanes.add(default_lane(user))
-    return sorted(lanes)
+    names = [row["name"] for row in options(conn, user.get("lanes") or [])]
+    if not names:
+        names.append(default_lane(user))
+    return sorted(names)
 
 
 def latest_lane(conn: sqlite3.Connection, user: dict) -> str:

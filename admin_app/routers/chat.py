@@ -16,6 +16,7 @@ from ..db import connect
 from ..deps import get_db, require_api, require_page
 from ..services import chat_service
 from ..services import grants as grant_service
+from ..services import lanes as lane_service
 from ..web import check_csrf, redirect, render
 
 router = APIRouter(prefix="/admin", tags=["chat"])
@@ -60,7 +61,7 @@ def chat_page(
         session=current,
         sessions=chat_service.list_sessions(db, user["id"]),
         messages=messages,
-        lanes=chat_service.available_lanes(db, user),
+        lanes=lane_service.options(db, user.get("lanes") or []),
         suggestions=chat_service.SUGGESTIONS,
         question_max=chat_service.QUESTION_MAX,
     )
