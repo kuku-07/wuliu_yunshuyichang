@@ -51,6 +51,7 @@ def chat_page(
         session=session,
         messages=messages,
         lanes=[session["lane_scope"]],
+        suggestions=chat_service.SUGGESTIONS,
         question_max=chat_service.QUESTION_MAX,
     )
 

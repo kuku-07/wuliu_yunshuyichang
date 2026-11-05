@@ -35,9 +35,16 @@
                 {% if not can('prompt:edit') %}disabled{% endif %}
                 placeholder="{{ template.editable_section }}">{% if draft %}{{ draft.editable_section }}{% endif %}</textarea>
     </label>
+    {% if not can('prompt:edit') %}
+    <div class="alert alert-err" style="margin:8px 0;">
+      当前账号是「{{ user.role_name }}」，按职责分离只能查看，不能编辑或发布提示词。
+      需要修改话术请改用 <strong>规则管理员</strong> 或 <strong>客服主管</strong> 账号登录。
+    </div>
+    {% else %}
     <p class="role-note">
       浅色文字是当前生效版本，仅作提示；一旦输入自己的内容就会被替换，不会把提示当正文保存。
     </p>
+    {% endif %}
     <div class="form-actions">
       {% if can('prompt:edit') %}
       <button class="btn btn-primary" type="submit">保存为草稿</button>

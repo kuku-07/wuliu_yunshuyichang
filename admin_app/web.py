@@ -34,6 +34,17 @@ def status_text(status: str) -> str:
     return STATUS_TEXT.get(status, status)
 
 
+def asset_version() -> str:
+    """静态资源版本号：取 CSS 的 mtime，样式一改浏览器就必须重新拉取。
+
+    之前遇到过「新样式不生效」：服务端文件更新了，浏览器还在用旧缓存。
+    """
+    try:
+        return str(int((config.BASE_DIR / "static" / "admin.css").stat().st_mtime))
+    except OSError:
+        return "0"
+
+
 def flag_text(flag: str) -> str:
     return FLAG_TYPES.get(flag, flag)
 
@@ -60,6 +71,7 @@ def render(request: Request, user: dict | None, template_name: str, status_code:
         "status_text": status_text,
         "flag_text": flag_text,
         "request_id": getattr(request.state, "request_id", ""),
+        "asset_version": asset_version(),
         **ctx,
     }
     response = templates.TemplateResponse(

@@ -29,6 +29,16 @@ HISTORY_PAIRS = 6
 RATE_LIMIT_PER_MIN = 10
 _TYPEWRITER_SLICE = 24
 
+# 首页引导问题：都来自演示规则文档里的真实条款，点了就能看到引用
+SUGGESTIONS = [
+    "客户临时改地址，异常应归为哪一类？",
+    "到货准时率和回执及时率有什么区别？",
+    "签收单缺少收货人签字怎么办？",
+    "卸货排队超过 4 小时算异常吗？",
+    "异常处理人需要多久内响应？",
+    "代收需要什么授权？",
+]
+
 _state_lock = threading.Lock()
 _recent_hits: dict[str, list[float]] = {}
 _busy_sessions: set[str] = set()

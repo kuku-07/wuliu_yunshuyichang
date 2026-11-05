@@ -62,7 +62,8 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
 - 演示数据（规则文档 / 会话 / 账号 / 运单 / 授权）默认保留，全部带 `is_demo` 标记；
   可在「数据管理」页**逐条删除**，删完还能**按组恢复**，重启不会自动回填。
 - 「提示词模板」里当前生效的话术以**浅色占位文字**显示，输入正式话术后即被替换，
-  不会把提示文字当成正文保存。
+  不会把提示文字当成正文保存；无编辑权限的角色（如系统管理员）会看到明确的只读说明。
+- 对话首屏是引导态：标题 + 6 个可点的常见问题，点一下填入输入框，发送后自动收起。
 - 每次问答都落 `messages` / `citations` / `audit_logs`，「对话审计」页看到的是真实会话。
 - 没有 `LLM_API_KEY` 时走离线抽取（`OfflineExtractiveLLM`），只验证检索与引用完整性；
   配置 `LLM_PROVIDER=openai_compatible` + `LLM_API_KEY` 后才由真模型生成。
