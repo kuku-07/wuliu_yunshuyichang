@@ -554,6 +554,26 @@ def _migrate(conn: sqlite3.Connection) -> None:
             (f"lnk_{row[0]}", row[1], row[0], row[2], row[3], row[4]),
         )
 
+    # 老库清理：重复导入造成的重复轨迹与重复异常，各留一条
+    conn.execute(
+        "DELETE FROM exception_events WHERE rowid NOT IN ("
+        " SELECT MIN(rowid) FROM exception_events"
+        " GROUP BY shipment_no, event_type, occurred_at, source)"
+    )
+    conn.execute(
+        "DELETE FROM shipment_tracks WHERE rowid NOT IN ("
+        " SELECT MIN(rowid) FROM shipment_tracks"
+        " GROUP BY shipment_no, at, status, location, note)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_exception_key"
+        " ON exception_events(shipment_no, event_type, occurred_at, source)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_track_key"
+        " ON shipment_tracks(shipment_no, at, status, location, note)"
+    )
+
     # 老库回填：切片补 embedding_ref（本地检索不依赖向量库，但要留引用位）
     conn.execute(
         "UPDATE kb_chunks SET embedding_ref ="

@@ -30,7 +30,7 @@ def add_tracks(conn: sqlite3.Connection, records: list[dict]) -> tuple[int, list
             errors.append(f"第 {index + 1} 条：缺少 at 或 status")
             continue
         conn.execute(
-            "INSERT INTO shipment_tracks"
+            "INSERT OR IGNORE INTO shipment_tracks"
             " (id, shipment_no, at, status, location, note, data_time)"
             " VALUES (?,?,?,?,?,?,?)",
             (

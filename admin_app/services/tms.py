@@ -142,6 +142,14 @@ def _upsert_children(conn: sqlite3.Connection, number: str, data: dict) -> tuple
     for item in data.get("tracks") or []:
         if not item.get("at") or not item.get("status"):
             continue
+        exists = conn.execute(
+            "SELECT 1 FROM shipment_tracks WHERE shipment_no=? AND at=? AND status=?"
+            " AND location=? AND note=?",
+            (number, item["at"], item["status"],
+             item.get("location") or "", item.get("note") or ""),
+        ).fetchone()
+        if exists:
+            continue
         conn.execute(
             "INSERT OR IGNORE INTO shipment_tracks"
             " (id, shipment_no, at, status, location, note, data_time)"
@@ -204,6 +212,14 @@ def _enqueue(conn: sqlite3.Connection, raw: dict, missing: list[str]) -> None:
 
 
 def _insert_event(conn: sqlite3.Connection, event: dict) -> None:
+    # 同一运单 + 类型 + 发生时间 + 来源只留一条，重复导入幂等
+    exists = conn.execute(
+        "SELECT 1 FROM exception_events WHERE shipment_no=? AND event_type=?"
+        " AND occurred_at=? AND source=?",
+        (event["shipment_no"], event["event_type"], event["occurred_at"], event["source"]),
+    ).fetchone()
+    if exists:
+        return
     conn.execute(
         "INSERT OR IGNORE INTO exception_events"
         " (id, shipment_no, sub_no, event_type, reason_code, occurred_at, source,"
