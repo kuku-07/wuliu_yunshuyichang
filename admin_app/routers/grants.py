@@ -27,6 +27,7 @@ def grants_page(
         request, user, "grants.html",
         grants=rows,
         users=grant_service.active_users(db),
+        shipments=grant_service.list_shipments(db),
         keyword=keyword,
         status_filter=status,
         now=now_iso(),
@@ -51,7 +52,6 @@ def create_grant(
 
     ok, error = grant_service.grant(
         db, user, user_id, shipment_no,
-        lane_scope=user.get("lanes", [""])[0] if user.get("lanes") else "",
         expires_at=expires_at.strip() or None,
         reason=reason.strip(),
     )

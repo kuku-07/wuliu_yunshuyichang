@@ -32,7 +32,7 @@
     <table class="table">
       <thead>
         <tr>
-          <th>运单号</th><th>被授权人</th><th>状态</th><th>授权人</th>
+          <th>运单号</th><th>线路</th><th>被授权人</th><th>状态</th><th>授权人</th>
           <th>授权时间</th><th>到期时间</th><th>原因</th><th></th>
         </tr>
       </thead>
@@ -40,6 +40,7 @@
         {% for g in grants %}
         <tr>
           <td class="mono">{{ g.shipment_no }}</td>
+          <td class="muted">{{ g.shipment_lane or g.lane_scope or '-' }}</td>
           <td>{{ g.user_name or g.user_id }} <span class="muted small">{{ g.employee_no or '' }}</span></td>
           <td>
             {% if g.state == 'active' %}<span class="badge badge-active">生效中</span>
@@ -61,7 +62,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="8" class="muted">暂无授权记录。</td></tr>
+        <tr><td colspan="9" class="muted">暂无授权记录。</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -81,7 +82,8 @@
       </select>
     </label>
     <label>运单号
-      <input type="text" name="shipment_no" placeholder="例如 YD20261030001" required maxlength="40">
+      <input type="text" name="shipment_no" list="shipment-options" required maxlength="40"
+             placeholder="YD + 11 位数字，例如 YD20261030001">
     </label>
     <label>到期时间（可空，空表示长期）
       <input type="datetime-local" name="expires_at">
@@ -93,5 +95,38 @@
       <button class="btn btn-primary" type="submit">授权</button>
     </div>
   </form>
+  <datalist id="shipment-options">
+    {% for s in shipments %}
+    <option value="{{ s.shipment_no }}">{{ s.lane_scope }} · {{ s.customer }}</option>
+    {% endfor %}
+  </datalist>
+  <p class="role-note">
+    线路不用填：授权时自动取运单主数据里的归属线路。运单不在主数据中无法授权，
+    也意味着对话入口带该运单号提问会被拒绝。
+  </p>
+</div>
+
+<div class="card">
+  <h2>运单主数据</h2>
+  <p class="role-note">预检用：运单号 → 归属线路。对话时会拿它和会话线路比对，不一致就拒绝。</p>
+  <div class="table-wrap" style="margin-top:12px;">
+    <table class="table">
+      <thead>
+        <tr><th>运单号</th><th>线路</th><th>客户</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        {% for s in shipments %}
+        <tr>
+          <td class="mono">{{ s.shipment_no }}</td>
+          <td>{{ s.lane_scope }}</td>
+          <td class="muted">{{ s.customer or '-' }}</td>
+          <td class="muted">{{ s.status }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">暂无运单主数据。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

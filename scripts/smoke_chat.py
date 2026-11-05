@@ -208,18 +208,56 @@ def main() -> int:
     ok("超过 10 次/分钟 → 429 RATE_LIMITED")
 
     # ---- 8. 运单级授权（ABAC 预检）----
-    # 8.1 无授权 / 过期 / 撤销 三种拒绝都要在流开始前返回 403
+    # 8.1 格式校验：不合法直接 400，不进入授权查询
+    status, payload, _ = ask(client, session_id, "封路导致延误怎么记录？", shipment_no="12345")
+    if status != 400 or payload.get("code") != "INVALID_REQUEST":
+        fail("运单号格式非法返回 400", f"{status} {payload}")
+    if "格式" not in payload.get("message", ""):
+        fail("格式错误文案明确", payload.get("message", ""))
+    ok("运单号格式非法 → 400 INVALID_REQUEST（不查授权）")
+
+    # 8.2 运单不在主数据：无从判定线路，不能放行
+    status, payload, _ = ask(client, session_id, "封路导致延误怎么记录？",
+                             shipment_no="YD20269999999")
+    if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
+        fail("未知运单返回 403", f"{status} {payload}")
+    ok("运单不在主数据 → 403（无法判定线路）")
+
+    # 8.3 跨线路：授权有效，但运单在华北、会话在华东
+    status, payload, _ = ask(client, session_id, "封路导致延误怎么记录？",
+                             shipment_no="YD20261030009")
+    if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
+        fail("跨线路返回 403", f"{status} {payload}")
+    ok("运单线路 ≠ 会话线路 → 403")
+
+    # 8.4 过期 / 撤销 / 无授权
+    auditor_client = TestClient(app)
+    login(auditor_client, "auditor")
+    auditor_session = re.search(
+        r'data-session="([^"]+)"', auditor_client.get("/admin/chat").text
+    ).group(1)
+    status, payload, _ = ask(auditor_client, auditor_session, "封路导致延误怎么记录？",
+                             shipment_no="YD20261030001")
+    if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
+        fail("过期授权返回 403", f"{status} {payload}")
+
+    sup2_client = TestClient(app)
+    login(sup2_client, "supervisor2")
+    sup2_session = re.search(
+        r'data-session="([^"]+)"', sup2_client.get("/admin/chat").text
+    ).group(1)
+    status, payload, _ = ask(sup2_client, sup2_session, "封路导致延误怎么记录？",
+                             shipment_no="YD20261030001")
+    if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
+        fail("已撤销授权返回 403", f"{status} {payload}")
+
     status, payload, _ = ask(client, session_id, "封路导致延误怎么记录？",
                              shipment_no="YD20261030002")
     if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
         fail("无授权运单返回 403", f"{status} {payload}")
-    status, payload, _ = ask(client, session_id, "封路导致延误怎么记录？",
-                             shipment_no="YD20261030009")
-    if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
-        fail("已过期授权返回 403", f"{status} {payload}")
-    ok("无授权 / 已过期运单 → 403 SHIPMENT_FORBIDDEN（流前拦截）")
+    ok("过期 / 已撤销 / 无授权 → 403 SHIPMENT_FORBIDDEN")
 
-    # 8.2 被拒请求不落消息、不检索、不调模型
+    # 8.5 被拒请求不落消息、不检索、不调模型
     conn = connect()
     try:
         leaked = conn.execute(
@@ -231,31 +269,42 @@ def main() -> int:
         fail("越权请求不得产生消息", f"{leaked} 条")
     ok("越权请求不产生消息（不检索、不调用模型）")
 
-    # 8.3 已授权则正常问答
+    # 8.6 已授权则正常问答
     status, events, _ = ask(client, session_id, "封路导致延误怎么记录？",
                             shipment_no="YD20261030001")
     if status != 200 or "delta" not in names(events):
         fail("已授权运单正常回答", str(status))
     ok("已授权运单 → 正常问答")
 
-    # 8.4 撤销后立刻失效（走后台页面操作）
+    # 8.7 管理页：权限、未知运单拒绝、撤销后立即失效
     admin = TestClient(app)
     login(admin, "sys_admin")
     grants_page = admin.get("/admin/grants")
     if grants_page.status_code != 200 or "运单级授权" not in grants_page.text:
         fail("运单授权页可访问", str(grants_page.status_code))
-    ok("运单授权页可访问（仅系统管理员）")
+    if "YD20261030009" not in grants_page.text:
+        fail("授权页展示运单主数据", "缺少运单主数据表")
+    ok("运单授权页可访问，含运单主数据")
 
-    auditor_client = TestClient(app)
-    login(auditor_client, "auditor")
     if auditor_client.get("/admin/grants").status_code != 403:
         fail("非管理员访问授权页应 403", "auditor 未被拒绝")
     ok("非管理员访问运单授权页 → 403")
 
+    bad_grant = admin.post(
+        "/admin/grants/create",
+        data={"csrf_token": csrf(admin), "user_id": "u_sup2",
+              "shipment_no": "YD20269999999", "expires_at": "", "reason": "冒烟测试"},
+        follow_redirects=False,
+    )
+    if "err" not in unquote(bad_grant.headers.get("location", "")):
+        fail("给未知运单授权应被拒绝", bad_grant.headers.get("location", ""))
+    ok("给不在主数据的运单授权 → 被拒绝")
+
     conn = connect()
     try:
         grant_row = conn.execute(
-            "SELECT id FROM authorization_grants WHERE user_id='u_rule' AND shipment_no='YD20261030001'"
+            "SELECT id FROM authorization_grants"
+            " WHERE user_id='u_rule' AND shipment_no='YD20261030001'"
         ).fetchone()
     finally:
         conn.close()
@@ -274,18 +323,28 @@ def main() -> int:
         fail("撤销后立即失效", f"{status} {payload}")
     ok("撤销授权后对话立即被拒（403）")
 
+    # 8.8 审计要能区分具体是哪一种拒绝
     conn = connect()
     try:
         actions = [r[0] for r in conn.execute(
             "SELECT action FROM audit_logs"
             " WHERE action LIKE 'chat.shipment%' OR action LIKE 'grant.%'"
         ).fetchall()]
+        details = " ".join(
+            r[0] for r in conn.execute(
+                "SELECT detail FROM audit_logs WHERE action='chat.shipment_forbidden'"
+            ).fetchall()
+        )
     finally:
         conn.close()
     for action in ("chat.shipment_allowed", "chat.shipment_forbidden", "grant.revoke"):
         if action not in actions:
             fail(f"审计含 {action}", str(sorted(set(actions))))
-    ok("授权放行 / 拒绝 / 撤销均写入审计")
+    for reason in ("SHIPMENT_UNKNOWN", "LANE_MISMATCH", "GRANT_EXPIRED",
+                   "GRANT_REVOKED", "NO_GRANT"):
+        if reason not in details:
+            fail(f"审计区分拒绝原因 {reason}", details[:200])
+    ok("审计区分 未知运单 / 跨线路 / 过期 / 撤销 / 无授权")
 
     # ---- 9. 落库：消息、引用、审计 ----
 

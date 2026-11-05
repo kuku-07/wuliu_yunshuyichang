@@ -37,7 +37,7 @@ python prototype/phase1_cli.py                # 交互问答
 | [admin_app/services/chat_service.py](admin_app/services/chat_service.py) | 会话、落库、SSE 事件编排（红线 → 检索 → 生成 → 校验） |
 | [admin_app/services/agent_core.py](admin_app/services/agent_core.py) | 复用阶段 1 的检索/闸门/护栏，数据源换成 SQLite 知识库 |
 | [admin_app/templates/chat.html](admin_app/templates/chat.html) | 单页聊天界面（打字机、引用面板、接管/复核横幅） |
-| [scripts/smoke_chat.py](scripts/smoke_chat.py) | 20 项验收测试（对照 docs/04 第 6 节） |
+| [scripts/smoke_chat.py](scripts/smoke_chat.py) | 24 项验收测试（对照 docs/04 第 6 节） |
 
 ```powershell
 .\run_admin.ps1                                  # 登录后左侧「一线问答」
@@ -51,8 +51,10 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
 - 检索的是**已发布**的规则切片（`kb_chunks.is_active=1`），后台改规则后对话立刻生效。
 - 提示词取后台「提示词模板」的**已发布版本**，不是硬编码常量。
 - 红线在调用模型之前拦截：命中时 0 次模型调用、0 条 `delta`，只发 `takeover`。
-- 带运单号提问时先做**运单级授权预检**：无授权 / 已过期 / 已撤销一律 403
-  `SHIPMENT_FORBIDDEN`，不检索、不调用模型；授权在「运单授权」页维护（仅系统管理员）。
+- 带运单号提问时先做**运单级授权预检**：运单号格式（默认 `YD` + 11 位数字）、
+  运单是否在主数据、运单线路与会话线路是否一致、授权是否有效、授权线路是否匹配，
+  任一条不满足都在流开始前拒绝（格式非法 400，其余 403 `SHIPMENT_FORBIDDEN`），
+  不检索、不调用模型；授权在「运单授权」页维护（仅系统管理员）。
 - 每次问答都落 `messages` / `citations` / `audit_logs`，「对话审计」页看到的是真实会话。
 - 没有 `LLM_API_KEY` 时走离线抽取（`OfflineExtractiveLLM`），只验证检索与引用完整性；
   配置 `LLM_PROVIDER=openai_compatible` + `LLM_API_KEY` 后才由真模型生成。

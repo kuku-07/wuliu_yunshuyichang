@@ -108,13 +108,19 @@ def chat_stream(
         return _error("SESSION_FORBIDDEN", "无权访问该会话", 403, request_id)
 
     # ---- 运单级授权预检：必须在流开始前，未授权不检索、不调模型 ----
-    shipment = grant_service.normalize(shipment_no)
-    if shipment:
-        if len(shipment) > 40:
-            return _error("INVALID_REQUEST", "运单号过长（上限 40 字符）", 400, request_id)
+    shipment = ""
+    if (shipment_no or "").strip():
+        shipment, format_error = grant_service.validate_format(shipment_no)
+        if format_error:
+            return _error(
+                "INVALID_REQUEST", f"请求参数不合法：{format_error}", 400, request_id
+            )
         conn = connect()
         try:
-            allowed, reason = grant_service.check(conn, user["id"], shipment)
+            allowed, reason = grant_service.check(
+                conn, user["id"], shipment,
+                session_lane=session.get("lane_scope") or "",
+            )
             grant_service.record_check(conn, user, shipment, allowed, reason, request_id)
         finally:
             conn.close()

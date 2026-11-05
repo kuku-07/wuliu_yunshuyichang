@@ -162,6 +162,14 @@ CREATE TABLE IF NOT EXISTS conversation_flags (
     revoke_reason TEXT
 );
 
+CREATE TABLE IF NOT EXISTS shipments (
+    shipment_no  TEXT PRIMARY KEY,
+    lane_scope   TEXT NOT NULL,
+    customer     TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'in_transit',
+    created_at   TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS authorization_grants (
     id           TEXT PRIMARY KEY,
     user_id      TEXT NOT NULL,
@@ -227,10 +235,8 @@ def init_db() -> None:
         )
         if conn.execute("SELECT COUNT(*) FROM admin_users").fetchone()[0] == 0:
             _seed(conn)
-        elif conn.execute("SELECT COUNT(*) FROM authorization_grants").fetchone()[0] == 0:
-            # 老库升级：补齐演示授权。不补的话对话入口带运单一律被拒，
-            # 看起来像功能坏了，其实是没有任何授权记录。
-            _seed_grants(conn, now_iso())
+        else:
+            _backfill_demo_data(conn)
         conn.commit()
     finally:
         conn.close()
@@ -364,36 +370,73 @@ def _seed(conn: sqlite3.Connection) -> None:
          "u_audit", "2026-10-29T15:00:00"),
     )
 
-    # ---- 运单级授权（ABAC 预检用）----
+    # ---- 运单主数据 + 运单级授权（ABAC 预检用）----
+    _seed_shipments(conn, created)
     _seed_grants(conn, created)
+
+
+def _backfill_demo_data(conn: sqlite3.Connection) -> None:
+    """老库升级：缺运单主数据 / 授权时补齐，已有数据一律不动。"""
+    created = now_iso()
+    if conn.execute("SELECT COUNT(*) FROM shipments").fetchone()[0] == 0:
+        _seed_shipments(conn, created)
+    if conn.execute("SELECT COUNT(*) FROM authorization_grants").fetchone()[0] == 0:
+        _seed_grants(conn, created)
+
+
+# ---------------------------------------------------------------------------
+# 运单主数据演示数据
+# ---------------------------------------------------------------------------
+# 用于判定「运单属于哪条线路」，从而挡住跨线路提问（f50：口径混用）。
+# YD20261030009 故意放在华北，用来演示「授权有效但线路不符」被拒。
+DEMO_SHIPMENTS = [
+    ("YD20261030001", "试点干线-华东", "杭州 · 某家电客户", "in_transit"),
+    ("YD20261030002", "试点干线-华东", "宁波 · 某建材客户", "delivered"),
+    ("YD20261030009", "试点干线-华北", "北京 · 某商超客户", "in_transit"),
+]
+
+
+def _seed_shipments(conn: sqlite3.Connection, created: str) -> None:
+    for shipment, lane, customer, status in DEMO_SHIPMENTS:
+        conn.execute(
+            "INSERT OR IGNORE INTO shipments"
+            " (shipment_no, lane_scope, customer, status, created_at)"
+            " VALUES (?,?,?,?,?)",
+            (shipment, lane, customer, status, created),
+        )
+
 
 # ---------------------------------------------------------------------------
 # 运单级授权演示数据
 # ---------------------------------------------------------------------------
-# 故意留出四种状态，方便演示「生效 / 过期 / 已撤销 / 无授权」：
+# 故意留出五种情况，方便演示：
 #   u_rule  YD20261030001 生效
-#   u_rule  YD20261030009 已过期（2026-10-01 到期）
+#   u_rule  YD20261030009 生效，但运单在华北、会话在华东 → 线路不符被拒
 #   u_sup1  YD20261030002 生效
 #   u_sup2  YD20261030001 已撤销
+#   u_audit YD20261030001 已过期（2026-10-01 到期）
 DEMO_GRANTS = [
     ("g_001", "u_rule", "YD20261030001", "active", "u_sys", None, None,
      "规则管理员查试点首单"),
-    ("g_002", "u_rule", "YD20261030009", "active", "u_sys", "2026-10-01T00:00:00", None,
-     "临时授权已过期"),
+    ("g_002", "u_rule", "YD20261030009", "active", "u_sys", None, None,
+     "跨线路：授权有效但不满足线路约束"),
     ("g_003", "u_sup1", "YD20261030002", "active", "u_sys", None, None,
      "客服主管跟进异常"),
     ("g_004", "u_sup2", "YD20261030001", "revoked", "u_sys", None, "2026-10-29T16:00:00",
      "已撤销：移交他人跟进"),
+    ("g_005", "u_audit", "YD20261030001", "active", "u_sys", "2026-10-01T00:00:00", None,
+     "临时授权已过期"),
 ]
 
 
 def _seed_grants(conn: sqlite3.Connection, created: str) -> None:
+    lane_by_shipment = {shipment: lane for shipment, lane, _, _ in DEMO_SHIPMENTS}
     for gid, uid, shipment, status, granted_by, expires_at, revoked_at, reason in DEMO_GRANTS:
         conn.execute(
             "INSERT OR IGNORE INTO authorization_grants"
             " (id, user_id, shipment_no, lane_scope, status, granted_by, granted_at,"
             "  expires_at, revoked_at, reason)"
             " VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (gid, uid, shipment, "试点干线-华东", status, granted_by, created, expires_at,
-             revoked_at, reason),
+            (gid, uid, shipment, lane_by_shipment.get(shipment, ""), status, granted_by,
+             created, expires_at, revoked_at, reason),
         )
