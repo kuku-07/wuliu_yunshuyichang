@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import time
 import tempfile
 from pathlib import Path
 
@@ -282,14 +283,37 @@ def main() -> int:
         fail("上传时识别注入内容", log["detail"] if log else "无审计")
     ok("规则文档里的指令注入在上传时被识别并清洗（原文不入库）")
 
-    # ---- 8. 契约：审计导出含 request_id ----
-    export = admin.get("/admin/audit/export")
+    # ---- 8. 契约：审计导出（异步任务）含 request_id ----
+    created_job = admin.post(
+        "/admin/audit/export", data={"csrf_token": csrf(admin)},
+        follow_redirects=False,
+    )
+    if created_job.status_code != 303:
+        fail("创建导出任务", str(created_job.status_code))
+
+    job = None
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        conn = connect()
+        try:
+            job = conn.execute(
+                "SELECT * FROM export_jobs ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+        if job and job["status"] in {"done", "failed"}:
+            break
+        time.sleep(0.1)
+    if job is None or job["status"] != "done":
+        fail("导出任务完成", dict(job) if job else "无任务")
+
+    export = admin.get(f"/admin/audit/exports/{job['id']}/download")
     text = export.content.decode("utf-8-sig")
     if "请求ID" not in text.splitlines()[0]:
         fail("导出含请求ID列", text.splitlines()[0])
     if not re.search(r"r_[0-9a-f]{6,}", text):
         fail("导出包含 request_id 值", "未找到")
-    ok("审计导出包含请求 ID 列与值")
+    ok("审计导出为异步任务，完成后下载，CSV 含请求 ID")
 
     # ---- 9. 契约：409 / PROMPT_LOCKED_SECTION ----
     conn = connect()

@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -168,7 +169,29 @@ def main() -> None:
         assert "标记已记录" in unquote(response.headers["location"])
         ok("审计标记")
 
-        export = client.get("/admin/audit/export")
+        created = client.post(
+            "/admin/audit/export",
+            data={"csrf_token": csrf(client)},
+            follow_redirects=False,
+        )
+        assert created.status_code == 303
+        from admin_app.db import connect as _connect
+
+        deadline = time.time() + 10
+        job = None
+        while time.time() < deadline:
+            conn = _connect()
+            try:
+                job = conn.execute(
+                    "SELECT * FROM export_jobs ORDER BY created_at DESC LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+            if job and job["status"] in {"done", "failed"}:
+                break
+            time.sleep(0.1)
+        assert job is not None and job["status"] == "done", dict(job) if job else "无任务"
+        export = client.get(f"/admin/audit/exports/{job['id']}/download")
         assert export.status_code == 200
         assert export.content.decode("utf-8").startswith("\ufeff")
         ok("CSV 导出（含 BOM）")

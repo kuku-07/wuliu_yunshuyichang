@@ -15,7 +15,7 @@
 | [docs/03-架构选型方案.md](docs/03-架构选型方案.md) | 四层架构、目录结构、数据库设计、第一周最小验证 | v0.1 |
 | [docs/04-聊天接口设计.md](docs/04-聊天接口设计.md) | SSE 接口、错误码、会话存储、前端状态机 | v0.1 |
 | [docs/05-管理后台设计.md](docs/05-管理后台设计.md) | 角色权限矩阵、8 个页面、接口清单、受控变更 | v0.1 |
-| [discovery-report.md](../discovery-report.md) | 原始业务发现报告（角色访谈证据，编号 f00–f55） | **仓库中缺失**（正文引用见各文档 f 编号） |
+| [docs/discovery-report.md](docs/discovery-report.md) | 原始业务发现报告说明（原报告未随仓库提供，编号 f00–f55 仍被正文引用） | 说明 |
 
 ## 阶段 1 原型（可运行，零依赖）
 
@@ -42,6 +42,7 @@ python prototype/phase1_cli.py                # 交互问答
 | [scripts/smoke_lanes.py](scripts/smoke_lanes.py) | 12 项干线管理测试 |
 | [scripts/smoke_mainline.py](scripts/smoke_mainline.py) | 18 项主线 + 契约测试 |
 | [scripts/smoke_ops.py](scripts/smoke_ops.py) | 9 项账号/线路权限、受理升级、预警测试 |
+| [scripts/smoke_platform.py](scripts/smoke_platform.py) | 8 项接入/映射/修正原因/外发/心跳测试 |
 | [scripts/smoke_data.py](scripts/smoke_data.py) | 12 项演示数据删除 / 恢复测试 |
 
 ```powershell
@@ -108,6 +109,12 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
   可确认或标误报，指标页给出误报率。
 - **账号与线路权限**：`/admin/users` 新建账号、改角色与线路范围、重置密码、解锁；
   非系统管理员的干线下拉按 `lane_scopes` 过滤，切到范围外会被拒绝。
+- **接入层**：TMS 支持样本 / HTTP 两种模式（`TMS_BASE_URL` 切换，带超时与重试）；
+  GPS 轨迹与 IM 留痕走 `POST /admin/api/ingest/tracks`、`/ingest/im`（`X-Ingest-Token`）。
+- **子单映射**：`shipment_links` 保留多来源，按「优先级 → 版本」归并出生效口径，查单页可追溯到候选来源。
+- **审核与留痕**：退回必须选修正原因（证据不足/口径错误/引用不符/越界/其他），
+  审核通过后可登记「已由人工外发」（渠道 + 时间 + 登记人），指标页给出修正率与外发率。
+- **审计导出异步化**：POST 创建任务 → 后台生成 CSV → 在「导出记录」页下载。
 
 ## 阶段 3 管理后台（可运行）
 

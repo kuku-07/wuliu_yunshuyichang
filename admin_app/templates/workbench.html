@@ -48,15 +48,24 @@
     <div class="meta-item"><div class="k">异常条数</div><div class="v">{{ evidence.events|length }}</div></div>
   </div>
 
-  <h3 style="margin-top:16px;">子单</h3>
+  <h3 style="margin-top:16px;">子单映射（按来源优先级归并）</h3>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>子单号</th><th>承运商</th><th>状态</th></tr></thead>
+      <thead><tr><th>子单号</th><th>承运商</th><th>状态</th><th>生效来源</th><th>版本</th><th>候选来源</th></tr></thead>
       <tbody>
-        {% for s in evidence.sub_shipments %}
-        <tr><td class="mono">{{ s.sub_no }}</td><td>{{ s.carrier or '-' }}</td><td class="muted">{{ s.status }}</td></tr>
+        {% for s in evidence.links %}
+        <tr>
+          <td class="mono">{{ s.sub_no }}</td>
+          <td>{{ s.carrier or '-' }}</td>
+          <td class="muted">{{ s.status or '-' }}</td>
+          <td>{{ s.source }}</td>
+          <td class="muted">{{ s.source_version or '-' }}</td>
+          <td class="muted small">
+            {% for c in s.candidates %}{{ c.source }}({{ c.priority }}){% if not loop.last %} · {% endif %}{% endfor %}
+          </td>
+        </tr>
         {% else %}
-        <tr><td colspan="3" class="muted">无子单记录。</td></tr>
+        <tr><td colspan="6" class="muted">无子单映射。</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -76,6 +85,25 @@
         </tr>
         {% else %}
         <tr><td colspan="4" class="muted">无轨迹快照。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:16px;">IM 留痕</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>时间</th><th>来源</th><th>操作人</th><th>内容</th></tr></thead>
+      <tbody>
+        {% for n in evidence.im_notes %}
+        <tr>
+          <td class="muted">{{ n.occurred_at|fmt_dt }}</td>
+          <td>{{ n.source }}</td>
+          <td class="muted">{{ n.operator or '-' }}</td>
+          <td class="muted small">{{ n.content[:80] }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">无 IM 留痕。</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -135,10 +163,33 @@
                 <option value="reject">退回</option>
                 <option value="takeover">转人工</option>
               </select>
+              <select name="reason">
+                <option value="">修正原因（退回必选）</option>
+                {% for key, label in review_reasons.items() %}
+                <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+              </select>
               <input type="text" name="note" placeholder="备注">
               <button class="btn btn-ghost btn-sm" type="submit">提交</button>
             </form>
-            {% else %}-{% endif %}
+            {% elif d.status == 'approved' %}
+              {% if d.sent_at %}
+              <div class="muted small">已外发 · {{ d.sent_channel }} · {{ d.sent_at|fmt_dt }}</div>
+              {% elif can('kb:edit') %}
+              <form method="post" action="/admin/workbench/{{ d.id }}/sent" class="review-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <select name="channel">
+                  <option value="">外发渠道</option>
+                  {% for key, label in sent_channels.items() %}
+                  <option value="{{ key }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-ghost btn-sm" type="submit">登记已发出</button>
+              </form>
+              {% else %}<span class="muted small">待人工外发</span>{% endif %}
+            {% else %}
+              {% if d.review_reason %}<span class="muted small">{{ review_reasons.get(d.review_reason, d.review_reason) }}</span>{% else %}-{% endif %}
+            {% endif %}
           </td>
         </tr>
         {% else %}

@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import csv
 import io
+import threading
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 
-from ..db import now_iso
+from .. import config
+from ..db import connect, now_iso
 from ..deps import get_db, require_api, require_page
 from ..security import mask_pii
 from ..services.audit_log import log as audit
@@ -98,12 +101,11 @@ def audit_list(
     )
 
 
-@router.get("/audit/export")
-def export(request: Request, employee: str = "", date_from: str = "", date_to: str = "",
-           lane: str = "", flag: str = "", takeover: str = "",
-           user=Depends(require_page("audit:export")), db=Depends(get_db)):
-    where, params = _filters(employee, date_from, date_to, lane, flag, takeover)
-    rows = db.execute(
+EXPORT_DIR = Path(config.DATA_DIR) / "exports"
+
+
+def _export_rows(db, where: str, params: list):
+    return db.execute(
         f"""
         SELECT s.id AS session_id, s.user_id, s.lane_scope, s.shipment_no, s.created_at,
                m.role, m.status, m.content, m.model, m.prompt_version, m.request_id,
@@ -116,29 +118,97 @@ def export(request: Request, employee: str = "", date_from: str = "", date_to: s
         """,
         params,
     ).fetchall()
-    if len(rows) >= 5000:
-        raise HTTPException(status_code=422, detail="导出超过 5000 条，请缩小筛选范围")
 
-    buffer = io.StringIO()
-    buffer.write("\ufeff")
-    writer = csv.writer(buffer)
-    writer.writerow(["会话ID", "员工ID", "线路", "运单号", "会话时间", "角色",
-                     "消息状态", "内容", "模型", "提示词版本", "标记类型", "请求ID"])
-    for row in rows:
-        safe_content, _ = mask_pii(row["content"].replace("\n", " "))
-        writer.writerow([row["session_id"], row["user_id"], row["lane_scope"],
-                         row["shipment_no"] or "", row["created_at"], row["role"],
-                         row["status"], safe_content, row["model"],
-                         row["prompt_version"], row["flags"] or "",
-                         row["request_id"] or ""])
-    audit(db, user, "audit_export", "audit", "conversations",
-          f"导出 {len(rows)} 行", getattr(request.state, "request_id", ""))
+
+def _write_export(job_id: str, where: str, params: list) -> None:
+    """后台线程：生成 CSV 并更新任务状态。"""
+    conn = connect()
+    try:
+        rows = _export_rows(conn, where, params)
+        buffer = io.StringIO()
+        buffer.write("\ufeff")
+        writer = csv.writer(buffer)
+        writer.writerow(["会话ID", "员工ID", "线路", "运单号", "会话时间", "角色",
+                         "消息状态", "内容", "模型", "提示词版本", "标记类型", "请求ID"])
+        for row in rows:
+            safe_content, _ = mask_pii(row["content"].replace("\n", " "))
+            writer.writerow([
+                row["session_id"], row["user_id"], row["lane_scope"],
+                row["shipment_no"] or "", row["created_at"], row["role"],
+                row["status"], safe_content, row["model"], row["prompt_version"],
+                row["flags"] or "", row["request_id"] or "",
+            ])
+        EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+        file_name = f"audit_{job_id}.csv"
+        (EXPORT_DIR / file_name).write_text(buffer.getvalue(), encoding="utf-8")
+        conn.execute(
+            "UPDATE export_jobs SET status='done', rows=?, file_name=?, finished_at=?"
+            " WHERE id=?",
+            (len(rows), file_name, now_iso(), job_id),
+        )
+        conn.commit()
+    except Exception as exc:  # 失败要落状态，不能静默
+        conn.execute(
+            "UPDATE export_jobs SET status='failed', error=?, finished_at=? WHERE id=?",
+            (str(exc)[:300], now_iso(), job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@router.post("/audit/export")
+def create_export(
+    request: Request,
+    csrf_token: str = Form(""),
+    employee: str = Form(""), date_from: str = Form(""), date_to: str = Form(""),
+    lane: str = Form(""), flag: str = Form(""), takeover: str = Form(""),
+    user=Depends(require_page("audit:export")), db=Depends(get_db),
+):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/audit", err="页面已过期，请刷新后重试")
+
+    where, params = _filters(employee, date_from, date_to, lane, flag, takeover)
+    job_id = f"exp_{uuid.uuid4().hex[:10]}"
+    db.execute(
+        "INSERT INTO export_jobs (id, status, created_by, created_at)"
+        " VALUES (?, 'running', ?, ?)",
+        (job_id, user["id"], now_iso()),
+    )
     db.commit()
-    filename = f"audit_{now_iso()[:10]}.csv"
-    return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    audit(db, user, "audit_export", "audit", "conversations",
+          f"创建导出任务 {job_id}", getattr(request.state, "request_id", ""))
+    db.commit()
+
+    threading.Thread(
+        target=_write_export, args=(job_id, where, params), daemon=True
+    ).start()
+    return redirect("/admin/audit/exports", ok="导出任务已创建，请稍后刷新下载")
+
+
+@router.get("/audit/exports")
+def export_jobs(request: Request, user=Depends(require_page("audit:export")),
+                db=Depends(get_db)):
+    jobs = [
+        dict(r)
+        for r in db.execute(
+            "SELECT * FROM export_jobs ORDER BY created_at DESC LIMIT 50"
+        ).fetchall()
+    ]
+    return render(request, user, "audit_exports.html", jobs=jobs)
+
+
+@router.get("/audit/exports/{job_id}/download")
+def download_export(job_id: str, user=Depends(require_page("audit:export")),
+                    db=Depends(get_db)):
+    job = db.execute("SELECT * FROM export_jobs WHERE id=?", (job_id,)).fetchone()
+    if job is None or job["status"] != "done":
+        raise HTTPException(status_code=404, detail="导出文件不存在或未完成")
+    path = EXPORT_DIR / job["file_name"]
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="导出文件已被清理")
+    return FileResponse(
+        path, media_type="text/csv; charset=utf-8", filename=job["file_name"]
     )
 
 

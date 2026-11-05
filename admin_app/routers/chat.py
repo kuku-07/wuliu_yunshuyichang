@@ -13,6 +13,7 @@ import json
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .. import config
 from ..db import connect
 from ..deps import get_db, require_api, require_page
 from ..services import chat_service
@@ -21,6 +22,9 @@ from ..services import lanes as lane_service
 from ..web import check_csrf, redirect, render
 
 router = APIRouter(prefix="/admin", tags=["chat"])
+
+# 心跳间隔：测试里会改小，避免等 15 秒
+HEARTBEAT_SECONDS = config.SSE_HEARTBEAT_SECONDS
 
 SSE_HEADERS = {
     "Cache-Control": "no-cache, no-transform",
@@ -242,7 +246,7 @@ async def chat_stream(
         try:
             while True:
                 try:
-                    item = await asyncio.wait_for(queue.get(), timeout=15)
+                    item = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_SECONDS)
                 except asyncio.TimeoutError:
                     yield ": ping\n\n"
                     continue

@@ -26,3 +26,16 @@ ALLOWED_EXTENSIONS = {".md", ".pdf"}
 # 真实规则不同就改环境变量 SHIPMENT_NO_PATTERN，不用动代码。
 SHIPMENT_NO_PATTERN = os.getenv("SHIPMENT_NO_PATTERN", r"^YD\d{11}$")
 SHIPMENT_NO_EXAMPLE = "YD20261030001"
+
+# ---- 外部接入 ----
+# TMS：默认读 samples/tms 样本；配置 TMS_BASE_URL 后改走只读 HTTP 接口
+TMS_BASE_URL = os.getenv("TMS_BASE_URL", "").rstrip("/")
+TMS_TOKEN = os.getenv("TMS_TOKEN", "")
+TMS_TIMEOUT = int(os.getenv("TMS_TIMEOUT", "10"))
+TMS_RETRIES = int(os.getenv("TMS_RETRIES", "2"))
+
+# GPS 轨迹 / IM 留痕 的推送令牌（机器调用，不走后台登录）
+INGEST_TOKEN = os.getenv("INGEST_TOKEN", "dev-ingest-token")
+
+# SSE 心跳间隔（秒），测试可调小
+SSE_HEARTBEAT_SECONDS = float(os.getenv("SSE_HEARTBEAT_SECONDS", "15"))

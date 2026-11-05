@@ -11,7 +11,10 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, db
 from .deps import Forbidden, LoginRequired
-from .routers import audit, auth, chat, data_admin, grants, kb, lanes, mainline, prompts, shipments, users
+from .routers import (
+    audit, auth, chat, data_admin, grants, ingest, kb, lanes, mainline, prompts,
+    shipments, users,
+)
 from .services import agent_core
 from .web import render
 
@@ -131,6 +134,7 @@ app.include_router(shipments.router)
 app.include_router(lanes.router)
 app.include_router(mainline.router)
 app.include_router(users.router)
+app.include_router(ingest.router)
 app.include_router(data_admin.router)
 app.include_router(kb.router)
 app.include_router(prompts.router)

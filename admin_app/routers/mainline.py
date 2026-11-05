@@ -120,6 +120,8 @@ def workbench_page(request: Request, shipment_no: str = "",
         shipment_no=shipment_no,
         evidence=evidence,
         drafts=draft_service.list_drafts(db),
+        review_reasons=draft_service.REVIEW_REASONS,
+        sent_channels=draft_service.SENT_CHANNELS,
     )
 
 
@@ -136,11 +138,22 @@ def generate_draft(request: Request, csrf_token: str = Form(""),
 
 @router.post("/workbench/{draft_id}/review")
 def review_draft(request: Request, draft_id: str, csrf_token: str = Form(""),
-                 action: str = Form(""), note: str = Form(""),
+                 action: str = Form(""), reason: str = Form(""), note: str = Form(""),
                  user=Depends(require_page("audit:mark")), db=Depends(get_db)):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/workbench", err="页面已过期，请刷新后重试")
-    ok, message = draft_service.review(db, user, draft_id, action, note)
+    ok, message = draft_service.review(db, user, draft_id, action, reason, note)
+    return redirect("/admin/workbench", ok=message if ok else None,
+                    err=None if ok else message)
+
+
+@router.post("/workbench/{draft_id}/sent")
+def mark_sent(request: Request, draft_id: str, csrf_token: str = Form(""),
+              channel: str = Form(""), note: str = Form(""),
+              user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/workbench", err="页面已过期，请刷新后重试")
+    ok, message = draft_service.mark_sent(db, user, draft_id, channel, note)
     return redirect("/admin/workbench", ok=message if ok else None,
                     err=None if ok else message)
 

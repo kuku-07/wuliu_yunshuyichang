@@ -34,6 +34,10 @@ def overview(conn: sqlite3.Connection) -> dict:
     }
     approved = draft_by_status.get("approved", 0)
     reviewed = approved + draft_by_status.get("rejected", 0)
+    rejected = draft_by_status.get("rejected", 0)
+    sent = conn.execute(
+        "SELECT COUNT(*) FROM drafts WHERE sent_at IS NOT NULL"
+    ).fetchone()[0]
 
     forbidden = conn.execute(
         "SELECT COUNT(*) FROM audit_logs WHERE action='chat.shipment_forbidden'"
@@ -119,6 +123,9 @@ def overview(conn: sqlite3.Connection) -> dict:
         "drafts": draft_total,
         "draft_by_status": draft_by_status,
         "approve_rate": _rate(approved, reviewed),
+        "correction_rate": _rate(rejected, reviewed),
+        "sent": sent,
+        "sent_rate": _rate(sent, approved),
         "takeovers": takeovers,
         "forbidden": forbidden,
         "delivered": len(delivered),

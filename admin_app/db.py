@@ -269,8 +269,12 @@ CREATE TABLE IF NOT EXISTS drafts (
     citations_json TEXT NOT NULL DEFAULT '[]',
     evidence_json  TEXT NOT NULL DEFAULT '{}',
     reviewer_id    TEXT,
+    review_reason  TEXT NOT NULL DEFAULT '',
     review_note    TEXT NOT NULL DEFAULT '',
     reviewed_at    TEXT,
+    sent_at        TEXT,
+    sent_by        TEXT,
+    sent_channel   TEXT NOT NULL DEFAULT '',
     created_at     TEXT NOT NULL
 );
 
@@ -286,6 +290,41 @@ CREATE TABLE IF NOT EXISTS alerts (
     reviewed_by  TEXT,
     review_note  TEXT NOT NULL DEFAULT '',
     UNIQUE(shipment_no, alert_type, status)
+);
+
+CREATE TABLE IF NOT EXISTS shipment_links (
+    id           TEXT PRIMARY KEY,
+    shipment_no  TEXT NOT NULL,
+    sub_no       TEXT NOT NULL,
+    carrier      TEXT NOT NULL DEFAULT '',
+    source       TEXT NOT NULL,
+    source_version TEXT NOT NULL DEFAULT '',
+    priority     INTEGER NOT NULL DEFAULT 100,
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    status       TEXT NOT NULL DEFAULT '',
+    updated_at   TEXT NOT NULL,
+    UNIQUE(sub_no, source)
+);
+
+CREATE TABLE IF NOT EXISTS im_notes (
+    id           TEXT PRIMARY KEY,
+    shipment_no  TEXT NOT NULL,
+    operator     TEXT NOT NULL DEFAULT '',
+    content      TEXT NOT NULL,
+    occurred_at  TEXT NOT NULL,
+    source       TEXT NOT NULL DEFAULT 'IM',
+    created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS export_jobs (
+    id           TEXT PRIMARY KEY,
+    status       TEXT NOT NULL DEFAULT 'running',
+    rows         INTEGER NOT NULL DEFAULT 0,
+    file_name    TEXT NOT NULL DEFAULT '',
+    created_by   TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL,
+    finished_at  TEXT,
+    error        TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
@@ -397,6 +436,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
          "ALTER TABLE exception_events ADD COLUMN escalated_at TEXT"),
         ("exception_events", "escalation_note",
          "ALTER TABLE exception_events ADD COLUMN escalation_note TEXT NOT NULL DEFAULT ''"),
+        ("drafts", "review_reason",
+         "ALTER TABLE drafts ADD COLUMN review_reason TEXT NOT NULL DEFAULT ''"),
+        ("drafts", "sent_at", "ALTER TABLE drafts ADD COLUMN sent_at TEXT"),
+        ("drafts", "sent_by", "ALTER TABLE drafts ADD COLUMN sent_by TEXT"),
+        ("drafts", "sent_channel",
+         "ALTER TABLE drafts ADD COLUMN sent_channel TEXT NOT NULL DEFAULT ''"),
     ):
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -428,6 +473,18 @@ def _migrate(conn: sqlite3.Connection) -> None:
         )
     for doc in DEMO_DOCS:
         conn.execute("UPDATE kb_documents SET is_demo=1 WHERE id=?", (doc["id"],))
+
+    # 老库回填：已有子单映射收进 shipment_links（来源记 TMS-历史）
+    for row in conn.execute(
+        "SELECT sub_no, shipment_no, carrier, status, updated_at FROM sub_shipments"
+    ):
+        conn.execute(
+            "INSERT OR IGNORE INTO shipment_links"
+            " (id, shipment_no, sub_no, carrier, source, source_version, priority,"
+            "  is_active, status, updated_at)"
+            " VALUES (?,?,?,?, 'TMS-历史', '', 50, 1, ?, ?)",
+            (f"lnk_{row[0]}", row[1], row[0], row[2], row[3], row[4]),
+        )
 
     # 老库升级：先补演示干线（仅当表为空时，避免删掉的干线在重启后复活），
     # 再把历史数据里出现过的其它线路名收进 lanes

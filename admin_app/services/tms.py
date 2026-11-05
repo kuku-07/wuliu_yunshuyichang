@@ -36,6 +36,18 @@ REQUIRED_FIELDS = ("shipment_no", "event_type", "occurred_at", "source")
 
 
 def load_samples(directory: Path | None = None) -> dict[str, Any]:
+    # 配了 TMS_BASE_URL 就走真实只读接口，否则读本地脱敏样本
+    if directory is None and config.TMS_BASE_URL:
+        from .tms_client import fetch_all
+
+        try:
+            payload = fetch_all()
+            payload["transport"] = "http"
+            return payload
+        except Exception as exc:  # 不伪造数据，交给上层提示
+            return {"queries": [], "exceptions": [], "errors": [str(exc)],
+                    "transport": "http"}
+
     base = directory or SAMPLE_DIR
     queries, exceptions, errors = [], [], []
 
@@ -56,7 +68,8 @@ def load_samples(directory: Path | None = None) -> dict[str, Any]:
         except (OSError, ValueError) as exc:
             errors.append(f"exceptions.json: {exc}")
 
-    return {"queries": queries, "exceptions": exceptions, "errors": errors}
+    return {"queries": queries, "exceptions": exceptions, "errors": errors,
+            "transport": "sample"}
 
 
 # ---------------------------------------------------------------------------
@@ -96,13 +109,31 @@ def _upsert_children(conn: sqlite3.Connection, number: str, data: dict) -> tuple
         sub_no = (item.get("sub_no") or "").strip()
         if not sub_no:
             continue
+        updated = now_iso()
         conn.execute(
             "INSERT INTO sub_shipments (sub_no, shipment_no, carrier, status, updated_at)"
             " VALUES (?,?,?,?,?)"
             " ON CONFLICT(sub_no) DO UPDATE SET"
             "   shipment_no=excluded.shipment_no, carrier=excluded.carrier,"
             "   status=excluded.status, updated_at=excluded.updated_at",
-            (sub_no, number, item.get("carrier") or "", item.get("status") or "", now_iso()),
+            (sub_no, number, item.get("carrier") or "", item.get("status") or "", updated),
+        )
+        source = (data.get("source") or "TMS").strip()
+        conn.execute(
+            "INSERT INTO shipment_links"
+            " (id, shipment_no, sub_no, carrier, source, source_version, priority,"
+            "  is_active, status, updated_at)"
+            " VALUES (?,?,?,?,?,?,?, 1, ?, ?)"
+            " ON CONFLICT(sub_no, source) DO UPDATE SET"
+            "   shipment_no=excluded.shipment_no, carrier=excluded.carrier,"
+            "   source_version=excluded.source_version, priority=excluded.priority,"
+            "   status=excluded.status, updated_at=excluded.updated_at",
+            (
+                f"lnk_{sub_no}_{source}", number, sub_no, item.get("carrier") or "",
+                source, (data.get("source_version") or "").strip(),
+                100 if source.upper() == "TMS" else 50,
+                item.get("status") or "", updated,
+            ),
         )
         subs += 1
 

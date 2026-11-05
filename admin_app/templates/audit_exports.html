@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}导出记录{% endblock %}
+{% block page_title %}导出任务{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>导出任务</h2>
+      <p class="role-note">
+        导出是异步任务：创建后后台生成 CSV，完成后在这里下载。单次最多 5000 条，内容已脱敏。
+      </p>
+    </div>
+    <a class="btn btn-ghost" href="/admin/audit">返回审计</a>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>任务</th><th>状态</th><th>行数</th><th>创建时间</th><th>完成时间</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td class="mono">{{ job.id }}</td>
+          <td>
+            {% if job.status == 'done' %}<span class="badge badge-active">已完成</span>
+            {% elif job.status == 'failed' %}<span class="badge badge-offline">失败</span>
+            {% else %}<span class="badge badge-pending">生成中</span>{% endif %}
+            {% if job.error %}<div class="muted small">{{ job.error }}</div>{% endif %}
+          </td>
+          <td class="num">{{ job.rows }}</td>
+          <td class="muted">{{ job.created_at|fmt_dt }}</td>
+          <td class="muted">{{ job.finished_at|fmt_dt if job.finished_at else '-' }}</td>
+          <td>
+            {% if job.status == 'done' %}
+            <a class="btn btn-ghost btn-sm" href="/admin/audit/exports/{{ job.id }}/download">下载</a>
+            {% else %}<span class="muted small">-</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">还没有导出任务。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

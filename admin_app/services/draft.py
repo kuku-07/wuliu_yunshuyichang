@@ -12,6 +12,8 @@ from typing import Any
 
 from ..db import now_iso
 from . import agent_core, chat_service
+from . import ingest as ingest_service
+from . import links as link_service
 from .audit_log import log as audit
 
 DRAFT_QUESTION = "这票货现在是什么情况？异常应如何处置？"
@@ -51,6 +53,8 @@ def evidence(conn: sqlite3.Connection, shipment_no: str) -> dict | None:
     return {
         "shipment": dict(shipment),
         "sub_shipments": subs,
+        "links": link_service.resolve(conn, shipment_no),
+        "im_notes": ingest_service.list_im_notes(conn, shipment_no),
         "tracks": tracks,
         "events": events,
         "data_time": max(data_times + [now_iso()]) if data_times else now_iso(),
@@ -80,15 +84,31 @@ def evidence_blocks(ev: dict) -> list[dict]:
         "data_time": ev["data_time"],
     }]
 
-    for sub in ev["sub_shipments"]:
+    for sub in ev.get("links") or ev["sub_shipments"]:
         blocks.append({
-            "title": "TMS 子单",
+            "title": "子单映射",
             "section": f"子单 {sub['sub_no']}",
-            "version": "当前",
+            "version": sub.get("source_version") or "当前",
             "lane_scope": shipment.get("lane_scope") or "",
             "effective_from": "",
-            "quote": _quote(f"承运商 {sub.get('carrier') or '-'}，状态 {sub.get('status')}"),
-            "data_time": sub.get("updated_at") or ev["data_time"],
+            "quote": _quote(
+                f"承运商 {sub.get('carrier') or '-'}，状态 {sub.get('status') or '-'}，"
+                f"来源 {sub.get('source') or 'TMS'}"
+                + (f"（另有 {len(sub.get('candidates') or []) - 1} 个来源）"
+                   if len(sub.get("candidates") or []) > 1 else "")
+            ),
+            "data_time": ev["data_time"],
+        })
+
+    for note in ev.get("im_notes") or []:
+        blocks.append({
+            "title": "IM 留痕",
+            "section": note.get("source") or "IM",
+            "version": "人工",
+            "lane_scope": shipment.get("lane_scope") or "",
+            "effective_from": "",
+            "quote": _quote(f"{note['occurred_at']} {note.get('operator') or '-'}：{note['content']}"),
+            "data_time": note["occurred_at"],
         })
 
     for track in ev["tracks"]:
@@ -226,6 +246,17 @@ REVIEW_ACTIONS = {
     "takeover": "taken_over",
 }
 
+# 修正原因：可归类才谈得上「人工修正率」（docs/03 §4.2 第 4 条）
+REVIEW_REASONS = {
+    "EVIDENCE_GAP": "证据不足",
+    "WRONG_RULE": "口径/规则错误",
+    "CITATION": "引用不符",
+    "OVERREACH": "越界表述",
+    "OTHER": "其他",
+}
+
+SENT_CHANNELS = {"IM": "IM 消息", "PHONE": "电话", "EMAIL": "邮件", "OTHER": "其他"}
+
 
 def list_drafts(conn: sqlite3.Connection, status: str = "") -> list[dict]:
     sql = "SELECT * FROM drafts"
@@ -243,11 +274,17 @@ def get_draft(conn: sqlite3.Connection, draft_id: str) -> dict | None:
 
 
 def review(
-    conn: sqlite3.Connection, user: dict, draft_id: str, action: str, note: str = "",
+    conn: sqlite3.Connection, user: dict, draft_id: str, action: str,
+    reason: str = "", note: str = "",
 ) -> tuple[bool, str]:
     status = REVIEW_ACTIONS.get(action)
     if status is None:
         return False, "不支持的审核动作"
+    if action == "reject" and reason not in REVIEW_REASONS:
+        return False, "退回时必须选择修正原因"
+    if reason and reason not in REVIEW_REASONS:
+        return False, "修正原因不合法"
+
     draft = get_draft(conn, draft_id)
     if draft is None:
         return False, "草稿不存在"
@@ -255,15 +292,43 @@ def review(
         return False, f"当前状态（{draft['status']}）不能审核"
 
     conn.execute(
-        "UPDATE drafts SET status=?, reviewer_id=?, review_note=?, reviewed_at=? WHERE id=?",
-        (status, user["id"], (note or "").strip()[:200], now_iso(), draft_id),
+        "UPDATE drafts SET status=?, reviewer_id=?, review_reason=?, review_note=?,"
+        " reviewed_at=? WHERE id=?",
+        (status, user["id"], reason or "", (note or "").strip()[:200],
+         now_iso(), draft_id),
     )
     conn.commit()
     audit(conn, user, f"draft.{action}", "draft", draft_id,
-          f"{draft['shipment_no']} → {status}；备注 {note or '-'}")
+          f"{draft['shipment_no']} → {status}；原因 "
+          f"{REVIEW_REASONS.get(reason, '-')}；备注 {note or '-'}")
     conn.commit()
     return True, {
         "approve": "已通过",
         "reject": "已退回",
         "takeover": "已转人工接管",
     }[action]
+
+
+def mark_sent(
+    conn: sqlite3.Connection, user: dict, draft_id: str, channel: str, note: str = "",
+) -> tuple[bool, str]:
+    """记录「已由人工发出」。系统不发送消息，只登记外发事实。"""
+    if channel not in SENT_CHANNELS:
+        return False, "请选择外发渠道"
+    draft = get_draft(conn, draft_id)
+    if draft is None:
+        return False, "草稿不存在"
+    if draft["status"] != "approved":
+        return False, "只有审核通过的草稿才能登记外发"
+    if draft["sent_at"]:
+        return False, "该草稿已登记过外发"
+
+    conn.execute(
+        "UPDATE drafts SET sent_at=?, sent_by=?, sent_channel=? WHERE id=?",
+        (now_iso(), user["id"], channel, draft_id),
+    )
+    conn.commit()
+    audit(conn, user, "draft.sent", "draft", draft_id,
+          f"{draft['shipment_no']} 人工外发（{SENT_CHANNELS[channel]}）；备注 {note or '-'}")
+    conn.commit()
+    return True, "已登记外发"
