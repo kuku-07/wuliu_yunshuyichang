@@ -69,13 +69,23 @@ def available_lanes(conn: sqlite3.Connection, user: dict) -> list[str]:
 
 
 def latest_lane(conn: sqlite3.Connection, user: dict) -> str:
-    """新建会话时沿用最近一个会话的线路，避免每次都要重选。"""
+    """新建会话时沿用最近一个会话的线路；没有历史会话就取干线表里第一条启用干线。"""
     row = conn.execute(
         "SELECT lane_scope FROM sessions WHERE user_id=?"
         " ORDER BY last_active_at DESC, rowid DESC LIMIT 1",
         (user["id"],),
     ).fetchone()
-    return (row["lane_scope"] if row and row["lane_scope"] else default_lane(user))
+    if row and row["lane_scope"]:
+        return row["lane_scope"]
+
+    lanes = user.get("lanes") or []
+    if lanes:
+        return lanes[0]
+
+    from .lanes import active_names
+
+    names = active_names(conn)
+    return names[0] if names else default_lane(user)
 
 
 def set_session_lane(

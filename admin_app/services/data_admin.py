@@ -13,6 +13,7 @@ import sqlite3
 from ..db import (
     _seed_audit_sessions,
     _seed_grants,
+    _seed_lanes,
     _seed_rule_doc,
     _seed_shipments,
     _seed_users,
@@ -251,15 +252,19 @@ def delete(conn: sqlite3.Connection, actor: dict, category: str, item_id: str) -
 def restore(conn: sqlite3.Connection, actor: dict, category: str) -> tuple[bool, int]:
     created = now_iso()
     if category == "docs":
+        # 规则必须挂在已存在的干线上，先补干线再补规则
+        _seed_lanes(conn, created)
         _seed_rule_doc(conn, created)
     elif category == "sessions":
         _seed_audit_sessions(conn, created)
     elif category == "users":
         _seed_users(conn, created)
     elif category == "shipments":
+        _seed_lanes(conn, created)
         _seed_shipments(conn, created)
     elif category == "grants":
         # 授权依赖运单，先把运单补齐，否则会造出指向不存在运单的授权
+        _seed_lanes(conn, created)
         _seed_shipments(conn, created)
         _seed_grants(conn, created)
     else:

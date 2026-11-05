@@ -56,12 +56,21 @@ def chat_page(
         current = chat_service.get_or_create_session(db, user)
 
     messages = chat_service.load_messages(db, current["id"])
+    lane_options = lane_service.options(db, user.get("lanes") or [])
+    # 会话正在用的线路如果被停用了，仍要出现在下拉里，否则界面显示与实际不一致
+    if current["lane_scope"] and all(
+        option["name"] != current["lane_scope"] for option in lane_options
+    ):
+        lane_options.append(
+            {"name": current["lane_scope"], "region": "", "status": "disabled"}
+        )
+
     return render(
         request, user, "chat.html",
         session=current,
         sessions=chat_service.list_sessions(db, user["id"]),
         messages=messages,
-        lanes=lane_service.options(db, user.get("lanes") or []),
+        lanes=lane_options,
         suggestions=chat_service.SUGGESTIONS,
         question_max=chat_service.QUESTION_MAX,
     )

@@ -27,7 +27,8 @@ def list_lanes(conn: sqlite3.Connection, include_disabled: bool = True) -> list[
         "SELECT l.*,"
         "  (SELECT COUNT(*) FROM kb_documents d WHERE d.lane_scope=l.name) AS doc_count,"
         "  (SELECT COUNT(*) FROM shipments s WHERE s.lane_scope=l.name) AS shipment_count,"
-        "  (SELECT COUNT(*) FROM authorization_grants g WHERE g.lane_scope=l.name) AS grant_count"
+        "  (SELECT COUNT(*) FROM authorization_grants g WHERE g.lane_scope=l.name) AS grant_count,"
+        "  (SELECT COUNT(*) FROM sessions ss WHERE ss.lane_scope=l.name) AS session_count"
         " FROM lanes l"
     )
     if not include_disabled:
@@ -124,6 +125,11 @@ def usage(conn: sqlite3.Connection, name: str) -> dict:
         "grants": conn.execute(
             "SELECT COUNT(*) FROM authorization_grants WHERE lane_scope=?", (name,)
         ).fetchone()[0],
+        # 历史会话也算引用：审计页的线路筛选就是从 sessions 里取值的，
+        # 删掉干线会让这些会话的线路变成查不到的名字。
+        "sessions": conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE lane_scope=?", (name,)
+        ).fetchone()[0],
     }
 
 
@@ -140,6 +146,8 @@ def delete(conn: sqlite3.Connection, actor: dict, name: str) -> tuple[bool, str]
             parts.append(f"运单 {used['shipments']} 票")
         if used["grants"]:
             parts.append(f"授权 {used['grants']} 条")
+        if used["sessions"]:
+            parts.append(f"会话 {used['sessions']} 个")
         return False, f"该干线仍被引用（{'、'.join(parts)}），请先清理或改为停用"
 
     conn.execute("DELETE FROM lanes WHERE name=?", (name,))

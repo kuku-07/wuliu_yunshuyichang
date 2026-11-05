@@ -18,7 +18,7 @@
       <thead>
         <tr>
           <th>干线名称</th><th>地区</th><th>状态</th>
-          <th>规则</th><th>运单</th><th>授权</th><th>备注</th><th></th>
+          <th>规则</th><th>运单</th><th>授权</th><th>会话</th><th>备注</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -33,6 +33,7 @@
           <td class="num">{{ lane.doc_count }}</td>
           <td class="num">{{ lane.shipment_count }}</td>
           <td class="num">{{ lane.grant_count }}</td>
+          <td class="num">{{ lane.session_count }}</td>
           <td class="muted small">{{ lane.note or '-' }}</td>
           <td class="row-actions">
             <form method="post" action="/admin/lanes/status" class="inline-form">
@@ -55,7 +56,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="8" class="muted">还没有干线，先在下面新建一条。</td></tr>
+        <tr><td colspan="9" class="muted">还没有干线，先在下面新建一条。</td></tr>
         {% endfor %}
       </tbody>
     </table>

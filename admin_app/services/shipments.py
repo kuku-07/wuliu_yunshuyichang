@@ -1,15 +1,13 @@
 """运单主数据维护。
 
 运单线路是授权预检的判定依据（见 services/grants.py），所以这张表要能维护：
-登记、改客户/状态、下车（删除）。删除前先看有没有生效中的授权，避免
+登记、改客户/状态、删除。删除前先看有没有生效中的授权，避免
 「删了运单、授权还在」这种自相矛盾的状态。
 
-另外承担演示数据的清理与恢复：演示行带 is_demo=1，可以一键删掉，
-也可以一键恢复，且清理后重启不会自己长回来（见 db.DEMO_SEED_KEY）。
+线路本身由 services/lanes.py 管理；这里只做校验（必须存在且启用）。
 """
 from __future__ import annotations
 
-import json
 import sqlite3
 
 from ..db import now_iso
@@ -68,27 +66,6 @@ def get(conn: sqlite3.Connection, shipment_no: str) -> dict | None:
         "SELECT * FROM shipments WHERE shipment_no=?", (grant_service.normalize(shipment_no),)
     ).fetchone()
     return dict(row) if row else None
-
-
-def known_lanes(conn: sqlite3.Connection) -> list[str]:
-    """可选的线路：用现有用户的线路范围 + 已有运单的线路，避免手填出孤岛。"""
-    lanes: set[str] = set()
-    for row in conn.execute("SELECT lane_scopes FROM admin_users"):
-        try:
-            for lane in json.loads(row["lane_scopes"] or "[]"):
-                if lane:
-                    lanes.add(lane)
-        except (ValueError, TypeError):
-            continue
-    for row in conn.execute("SELECT DISTINCT lane_scope FROM shipments"):
-        if row["lane_scope"]:
-            lanes.add(row["lane_scope"])
-    for row in conn.execute("SELECT DISTINCT lane_scope FROM kb_documents"):
-        if row["lane_scope"]:
-            lanes.add(row["lane_scope"])
-    if not lanes:
-        lanes.add("试点干线-华东")
-    return sorted(lanes)
 
 
 # ---------------------------------------------------------------------------

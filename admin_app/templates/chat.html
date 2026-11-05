@@ -42,7 +42,7 @@
           <span>作业线路</span>
           <select name="lane_scope" onchange="this.form.submit()">
             {% for lane in lanes %}
-            <option value="{{ lane.name }}" {% if lane.name == session.lane_scope %}selected{% endif %}>{{ lane.name }}{% if lane.region %}（{{ lane.region }}）{% endif %}</option>
+            <option value="{{ lane.name }}" {% if lane.name == session.lane_scope %}selected{% endif %}>{{ lane.name }}{% if lane.region %}（{{ lane.region }}）{% endif %}{% if lane.status == 'disabled' %}（已停用）{% endif %}</option>
             {% endfor %}
           </select>
         </label>

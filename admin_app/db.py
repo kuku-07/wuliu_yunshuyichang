@@ -328,8 +328,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for doc in DEMO_DOCS:
         conn.execute("UPDATE kb_documents SET is_demo=1 WHERE id=?", (doc["id"],))
 
-    # 老库升级：先补演示干线的地区，再把历史数据里出现过的其它线路名收进 lanes
-    _seed_lanes(conn, now_iso())
+    # 老库升级：先补演示干线（仅当表为空时，避免删掉的干线在重启后复活），
+    # 再把历史数据里出现过的其它线路名收进 lanes
+    if conn.execute("SELECT COUNT(*) FROM lanes").fetchone()[0] == 0:
+        _seed_lanes(conn, now_iso())
     for row in conn.execute(
         "SELECT DISTINCT lane_scope FROM kb_documents WHERE lane_scope <> ''"
         " UNION SELECT DISTINCT lane_scope FROM shipments WHERE lane_scope <> ''"
@@ -556,8 +558,8 @@ def _seed(conn: sqlite3.Connection) -> None:
 def _backfill_demo_data(conn: sqlite3.Connection) -> None:
     """老库升级：只在「从未标记过演示数据」时补一次。
 
-    管理员手动清掉演示数据后 `demo_seed_state='purged'`，重启不会再塞回来，
-    否则「删除」就形同虚设。
+    标记写入 `app_meta.demo_seed_state` 之后就不再回填——这样在「数据管理」里
+    删掉的演示行不会在重启后复活。
     """
     if get_meta(conn, DEMO_SEED_KEY):
         return
