@@ -1,0 +1,18 @@
+{
+  "shipment_no": "YD20261030001",
+  "lane_scope": "试点干线-华东",
+  "customer": "杭州 · 某家电客户",
+  "status": "in_transit",
+  "plan_eta": "2026-11-05T18:00:00",
+  "data_time": "2026-11-05T09:00:00",
+  "source": "TMS",
+  "source_version": "export-v1",
+  "sub_shipments": [
+    { "sub_no": "YD20261030001-01", "carrier": "顺丰", "status": "in_transit" },
+    { "sub_no": "YD20261030001-02", "carrier": "德邦", "status": "in_transit" }
+  ],
+  "tracks": [
+    { "at": "2026-11-05T08:30:00", "status": "in_transit", "location": "杭州转运中心", "note": "已到达转运中心" },
+    { "at": "2026-11-05T07:10:00", "status": "picked_up", "location": "上海分拨", "note": "已提货" }
+  ]
+}

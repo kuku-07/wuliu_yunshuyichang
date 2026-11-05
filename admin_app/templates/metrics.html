@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}指标{% endblock %}
+{% block page_title %}指标与留存{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>试点指标</h2>
+      <p class="role-note">
+        口径按 docs/02 §8：到货与回执分开算，不用消息量代替完成量；越权拦截单列。
+      </p>
+    </div>
+    {% if can('users:manage') %}
+    <form method="post" action="/admin/metrics/retention" class="inline-form"
+          onsubmit="return confirm('清理 90 天前的消息与审计日志？该操作不可撤销。');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-danger" type="submit">清理 90 天前数据</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-item"><div class="k">异常事件</div><div class="v">{{ stats.events }}</div></div>
+    <div class="meta-item"><div class="k">待修复</div><div class="v">{{ stats.pending_repairs }}</div></div>
+    <div class="meta-item"><div class="k">归一成功率</div><div class="v">{{ stats.normalize_rate }}%</div></div>
+    <div class="meta-item"><div class="k">草稿总数</div><div class="v">{{ stats.drafts }}</div></div>
+    <div class="meta-item"><div class="k">草稿通过率</div><div class="v">{{ stats.approve_rate }}%</div></div>
+    <div class="meta-item"><div class="k">人工接管</div><div class="v">{{ stats.takeovers }}</div></div>
+    <div class="meta-item"><div class="k">越权拦截</div><div class="v">{{ stats.forbidden }}</div></div>
+    <div class="meta-item"><div class="k">已签收运单</div><div class="v">{{ stats.delivered }}</div></div>
+    <div class="meta-item"><div class="k">到货准时率</div><div class="v">{{ stats.on_time_rate }}%</div></div>
+    <div class="meta-item"><div class="k">回执 24h 及时率</div><div class="v">{{ stats.receipt_24h_rate }}%</div></div>
+  </div>
+
+  <h3 style="margin-top:18px;">草稿状态分布</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>状态</th><th>数量</th></tr></thead>
+      <tbody>
+        {% for status, count in stats.draft_by_status.items() %}
+        <tr><td>{{ status }}</td><td class="num">{{ count }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="muted">还没有草稿。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="role-note" style="margin-top:10px;">
+    留存：消息与审计日志保留 90 天，到期整批清理（append-only 指不改不删单条，到期清理是合规动作）。
+  </p>
+</div>
+{% endblock %}

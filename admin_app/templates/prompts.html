@@ -29,6 +29,7 @@
 
   <form method="post" action="/admin/prompts/{{ template.id }}/draft">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="locked_section" value="{{ template.locked_section }}">
     <label class="field">
       <span>话术与输出结构</span>
       <textarea name="editable_section"

@@ -19,6 +19,8 @@ import threading
 from pathlib import Path
 from typing import Any, Optional
 
+from ..security import strip_injection
+
 _PROTOTYPE_PATH = Path(__file__).resolve().parents[2] / "prototype" / "phase1_cli.py"
 
 _core_lock = threading.Lock()
@@ -82,7 +84,8 @@ def load_chunks(conn) -> list:
         chunk = core().Chunk(
             chunk_id=int(row["chunk_no"]),
             section=row["section"],
-            text=row["text"],
+            # 检索端再洗一遍：老数据或直接改库的内容同样进不了提示词
+            text=strip_injection(row["text"])[0],
             doc_title=row["title"],
             doc_version=row["version"],
             effective_from=row["effective_from"] or "",

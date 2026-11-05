@@ -154,6 +154,7 @@
   var buffer = "";
   var bodyEl = null;
   var current = null;
+  var slowTimer = null;
 
   function setState(text) { stateEl.textContent = text; }
   function scrollDown() { scroll.scrollTop = scroll.scrollHeight; }
@@ -361,6 +362,7 @@
 
   function finish() {
     busy = false;
+    if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
     sendBtn.disabled = false;
     input.disabled = false;
     input.focus();
@@ -384,6 +386,13 @@
     buffer = "";
     bodyEl = null;
     addBot();
+
+    // 8 秒还没等到第一个事件，就告诉用户「还在处理」，别让人以为卡死
+    slowTimer = setTimeout(function () {
+      if (current && current.skeleton) {
+        current.skeleton.textContent = "检索较慢，仍在处理…";
+      }
+    }, 8000);
 
     var fd = new FormData();
     fd.append("question", text);
@@ -414,6 +423,7 @@
         while ((idx = buf.indexOf("\n\n")) >= 0) {
           var raw = buf.slice(0, idx);
           buf = buf.slice(idx + 2);
+          if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
           handleEvent(raw);
         }
       }

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from .. import config
 from ..db import now_iso
 from ..deps import get_db, require_api, require_page
-from ..security import mask_pii, sha256_text
+from ..security import mask_pii, sha256_text, strip_injection
 from ..services import kb as kb_service
 from ..services import lanes as lane_service
 from ..services.audit_log import log as audit
@@ -130,6 +130,9 @@ async def upload_submit(
     except ValueError as exc:
         return redirect("/admin/kb/upload", err=str(exc))
 
+    # 投毒防护：文档里的「忽略以上指令」这类内容不能原样进提示词
+    text, injection_hits = strip_injection(text)
+
     chunks = kb_service.chunk_text(text)
     if not chunks:
         return redirect("/admin/kb/upload", err="未解析出有效切片，请检查文档内容")
@@ -186,7 +189,7 @@ async def upload_submit(
     stored = f"{uuid.uuid4().hex}{suffix}"
     (config.UPLOAD_DIR / stored).write_bytes(data)
     audit(db, user, "kb_upload", "kb_document", doc_id,
-          f"{title} v{version}，切片 {len(chunks)}，脱敏 {pii_hits} 处",
+          f"{title} v{version}，切片 {len(chunks)}，脱敏 {pii_hits} 处，注入清洗 {injection_hits} 行",
           getattr(request.state, "request_id", ""))
     db.commit()
     return redirect(f"/admin/kb/{doc_id}", ok=f"已生成草稿 v{version}，请检查切片后提交审核")
@@ -339,7 +342,8 @@ def delete_draft(request: Request, doc_id: str, csrf_token: str = Form(""),
         return redirect(f"/admin/kb/{doc_id}", err="页面已过期，请刷新后重试")
     doc = _doc_or_404(db, doc_id)
     if doc["status"] != "draft" or doc["active_version"]:
-        return redirect(f"/admin/kb/{doc_id}", err="已生效规则不可删除，请使用下线")
+        # 文档要求返回 409：已生效的规则不删，只能下线
+        raise HTTPException(status_code=409, detail="已生效规则不可删除，请使用下线")
     db.execute("DELETE FROM kb_chunks WHERE doc_id=?", (doc_id,))
     db.execute("DELETE FROM kb_document_versions WHERE doc_id=?", (doc_id,))
     db.execute("DELETE FROM kb_documents WHERE id=?", (doc_id,))

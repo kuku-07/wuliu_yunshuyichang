@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -124,11 +125,12 @@ def delete_session(
 
 
 @router.post("/api/chat/stream")
-def chat_stream(
+async def chat_stream(
     request: Request,
     question: str = Form(""),
     session_id: str = Form(""),
     shipment_no: str = Form(""),
+    client_msg_id: str = Form(""),
     csrf_token: str = Form(""),
     user=Depends(require_api()),
 ):
@@ -145,6 +147,8 @@ def chat_stream(
             "QUESTION_TOO_LONG",
             f"问题超过 {chat_service.QUESTION_MAX} 字，请精简后重试", 422, request_id,
         )
+    if len(client_msg_id) > 64:
+        return _error("INVALID_REQUEST", "client_msg_id 过长（上限 64 字符）", 400, request_id)
 
     conn = connect()
     try:
@@ -156,6 +160,25 @@ def chat_stream(
         return _error("SESSION_NOT_FOUND", "会话不存在或已关闭", 404, request_id)
     if session["user_id"] != user["id"]:
         return _error("SESSION_FORBIDDEN", "无权访问该会话", 403, request_id)
+
+    # ---- 幂等：同一 client_msg_id 已在处理/已完成，就不再重复生成 ----
+    if client_msg_id:
+        conn = connect()
+        try:
+            reply, in_flight = chat_service.find_reply(conn, session_id, client_msg_id)
+        finally:
+            conn.close()
+        if in_flight:
+            return _error("SESSION_BUSY", "当前会话正在回答，请等待完成", 409, request_id)
+        if reply:
+            async def replay_stream():
+                for event, data in chat_service.replay_events(reply):
+                    yield _sse(event, data)
+
+            return StreamingResponse(
+                replay_stream(), media_type="text/event-stream; charset=utf-8",
+                headers=SSE_HEADERS,
+            )
 
     # ---- 运单级授权预检：必须在流开始前，未授权不检索、不调模型 ----
     shipment = ""
@@ -187,12 +210,43 @@ def chat_stream(
     if not chat_service.acquire_session(session_id):
         return _error("SESSION_BUSY", "当前会话正在回答，请等待完成", 409, request_id)
 
-    def event_stream():
+    async def event_stream():
+        """把同步生成器桥到异步队列，顺带每 15 秒发一次心跳。
+
+        同步生成器跑在线程里，事件通过 call_soon_threadsafe 回主线程；
+        模型长时间不返回时，这里会持续发 `: ping`，避免网关把连接掐掉。
+        """
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        done = object()
+
+        def worker():
+            try:
+                for event, data in chat_service.stream_turn(
+                    connect, user, session, text, request_id,
+                    shipment_no=shipment, shipment_info=shipment_info,
+                    client_msg_id=client_msg_id,
+                ):
+                    loop.call_soon_threadsafe(queue.put_nowait, (event, data))
+            except Exception as exc:  # 兜底：线程里抛异常也要变成 error 事件
+                loop.call_soon_threadsafe(queue.put_nowait, (
+                    "error",
+                    {"code": "INTERNAL_ERROR", "message": f"系统内部错误：{exc}", "retryable": True},
+                ))
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, done)
+
+        loop.run_in_executor(None, worker)
         try:
-            for event, data in chat_service.stream_turn(
-                connect, user, session, text, request_id, shipment_no=shipment,
-                shipment_info=shipment_info,
-            ):
+            while True:
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+                    continue
+                if item is done:
+                    break
+                event, data = item
                 yield _sse(event, data)
         finally:
             chat_service.release_session(session_id)

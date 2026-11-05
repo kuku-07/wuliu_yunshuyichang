@@ -152,3 +152,34 @@ def locked_hash(text: str) -> str:
     """锁定段哈希：忽略行尾空白与空行差异，防止无意义的哈希漂移。"""
     normalized = "\n".join(line.strip() for line in text.strip().splitlines() if line.strip())
     return sha256_text(normalized)
+
+# ---------------------------------------------------------------------------
+# 知识库投毒防护
+# ---------------------------------------------------------------------------
+# 上传的规则文档会被检索进提示词，如果有人把「忽略以上指令」写进文档，
+# 就等于把指令塞进了系统提示。这里在入库和检索两端都做一次确定性清洗：
+# 命中的整行替换为占位符，保留行号与段落结构，并返回命中次数供审计。
+_INJECTION_PATTERNS = [
+    re.compile(r"忽略(以上|之前|前面|上述|上文)[^\n]{0,16}(指令|提示|规则|要求|设定)"),
+    re.compile(r"(?i)ignore\s+(all\s+)?(the\s+)?(previous|above|prior)\s+instructions?"),
+    re.compile(r"(?i)disregard\s+(all\s+)?(the\s+)?(previous|above|prior)"),
+    re.compile(r"(?i)you\s+are\s+now\s+(an?\s+)?(admin|developer|unrestricted)"),
+    re.compile(r"你现在是[^\n]{0,12}(管理员|开发者模式|无限制)"),
+]
+
+INJECTION_PLACEHOLDER = "［已移除疑似指令注入内容］"
+
+
+def strip_injection(text: str) -> tuple[str, int]:
+    """清洗疑似提示注入的行；返回 (清洗后文本, 命中行数)。"""
+    if not text:
+        return text, 0
+    hits = 0
+    lines = []
+    for line in text.splitlines():
+        if any(pattern.search(line) for pattern in _INJECTION_PATTERNS):
+            hits += 1
+            lines.append(INJECTION_PLACEHOLDER)
+        else:
+            lines.append(line)
+    return "\n".join(lines), hits

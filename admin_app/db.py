@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS messages (
     data_time      TEXT,
     confidence     REAL,
     latency_ms     INTEGER,
+    request_id     TEXT,
     created_at     TEXT NOT NULL
 );
 
@@ -170,6 +171,9 @@ CREATE TABLE IF NOT EXISTS shipments (
     lane_scope   TEXT NOT NULL,
     customer     TEXT NOT NULL DEFAULT '',
     status       TEXT NOT NULL DEFAULT 'in_transit',
+    plan_eta     TEXT,
+    delivered_at TEXT,
+    receipt_at   TEXT,
     is_demo      INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL
 );
@@ -202,6 +206,66 @@ CREATE TABLE IF NOT EXISTS authorization_grants (
     reason       TEXT NOT NULL DEFAULT '',
     is_demo      INTEGER NOT NULL DEFAULT 0,
     UNIQUE(user_id, shipment_no)
+);
+
+CREATE TABLE IF NOT EXISTS sub_shipments (
+    sub_no       TEXT PRIMARY KEY,
+    shipment_no  TEXT NOT NULL,
+    carrier      TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'in_transit',
+    updated_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS shipment_tracks (
+    id           TEXT PRIMARY KEY,
+    shipment_no  TEXT NOT NULL,
+    at           TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    location     TEXT NOT NULL DEFAULT '',
+    note         TEXT NOT NULL DEFAULT '',
+    data_time    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS exception_events (
+    id             TEXT PRIMARY KEY,
+    shipment_no    TEXT NOT NULL,
+    sub_no         TEXT,
+    event_type     TEXT NOT NULL,
+    reason_code    TEXT NOT NULL DEFAULT '',
+    occurred_at    TEXT NOT NULL,
+    source         TEXT NOT NULL,
+    source_version TEXT NOT NULL DEFAULT '',
+    handler        TEXT NOT NULL DEFAULT '',
+    due_at         TEXT,
+    status         TEXT NOT NULL DEFAULT 'normalized',
+    raw_ref        TEXT NOT NULL DEFAULT '',
+    data_time      TEXT NOT NULL,
+    created_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS repair_queue (
+    id          TEXT PRIMARY KEY,
+    raw_ref     TEXT NOT NULL,
+    raw_json    TEXT NOT NULL,
+    missing     TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    created_at  TEXT NOT NULL,
+    resolved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS drafts (
+    id             TEXT PRIMARY KEY,
+    shipment_no    TEXT NOT NULL,
+    content        TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'pending_review',
+    gate_reason    TEXT NOT NULL DEFAULT '',
+    guardrail      TEXT NOT NULL DEFAULT '',
+    citations_json TEXT NOT NULL DEFAULT '[]',
+    evidence_json  TEXT NOT NULL DEFAULT '{}',
+    reviewer_id    TEXT,
+    review_note    TEXT NOT NULL DEFAULT '',
+    reviewed_at    TEXT,
+    created_at     TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
@@ -296,6 +360,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
          "ALTER TABLE kb_documents ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"),
         ("sessions", "is_demo",
          "ALTER TABLE sessions ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"),
+        ("messages", "request_id",
+         "ALTER TABLE messages ADD COLUMN request_id TEXT"),
+        ("shipments", "plan_eta", "ALTER TABLE shipments ADD COLUMN plan_eta TEXT"),
+        ("shipments", "delivered_at", "ALTER TABLE shipments ADD COLUMN delivered_at TEXT"),
+        ("shipments", "receipt_at", "ALTER TABLE shipments ADD COLUMN receipt_at TEXT"),
     ):
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:

@@ -63,11 +63,18 @@ def prompts_page(request: Request, user=Depends(require_page("prompt:read")),
 
 @router.post("/prompts/{template_id}/draft")
 def save_draft(request: Request, template_id: str, editable_section: str = Form(""),
-               csrf_token: str = Form(""), user=Depends(require_page("prompt:edit")),
-               db=Depends(get_db)):
+               locked_section: str = Form(""), csrf_token: str = Form(""),
+               user=Depends(require_page("prompt:edit")), db=Depends(get_db)):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/prompts", err="页面已过期，请刷新后重试")
     template = _template_or_404(db, template_id)
+
+    # 锁定段不接受任何修改：表单会带回来一份原文用于比对，被改过就直接拒绝
+    if locked_section and locked_section.strip() != template["locked_section"].strip():
+        raise HTTPException(
+            status_code=409, detail="PROMPT_LOCKED_SECTION：锁定安全段不可修改"
+        )
+
     editable = editable_section.strip()
     if not editable:
         return redirect(

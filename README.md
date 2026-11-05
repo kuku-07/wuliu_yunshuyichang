@@ -40,6 +40,7 @@ python prototype/phase1_cli.py                # 交互问答
 | [scripts/smoke_chat.py](scripts/smoke_chat.py) | 24 项验收测试（对照 docs/04 第 6 节） |
 | [scripts/smoke_shipments.py](scripts/smoke_shipments.py) | 11 项运单登记测试 |
 | [scripts/smoke_lanes.py](scripts/smoke_lanes.py) | 12 项干线管理测试 |
+| [scripts/smoke_mainline.py](scripts/smoke_mainline.py) | 18 项主线 + 契约测试 |
 | [scripts/smoke_data.py](scripts/smoke_data.py) | 12 项演示数据删除 / 恢复测试 |
 
 ```powershell
@@ -77,6 +78,29 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
 - 每次问答都落 `messages` / `citations` / `audit_logs`，「对话审计」页看到的是真实会话。
 - 没有 `LLM_API_KEY` 时走离线抽取（`OfflineExtractiveLLM`），只验证检索与引用完整性；
   配置 `LLM_PROVIDER=openai_compatible` + `LLM_API_KEY` 后才由真模型生成。
+
+## 阶段 4 业务主线（可运行，样本驱动）
+
+| 文件 | 内容 |
+| --- | --- |
+| [admin_app/services/tms.py](admin_app/services/tms.py) | TMS 只读适配器：读 `samples/tms/` 脱敏导出，查单入库、异常按四要素归一 |
+| [admin_app/services/draft.py](admin_app/services/draft.py) | 证据包 → 闸门 → 模型 → 护栏 → 待审核草稿 |
+| [admin_app/services/metrics.py](admin_app/services/metrics.py) | 归一率、草稿通过率、接管/越权、到货准时率、回执 24h 及时率 |
+| [admin_app/services/retention.py](admin_app/services/retention.py) | 90 天留存清理（启动时执行，也可手动触发） |
+| [samples/tms/](samples/tms/) | 脱敏查单与异常样本（真实接入时只替换 `load_samples()`） |
+
+```powershell
+.\run_admin.ps1     # 登录后左侧「业务」：异常与修复 / 查单工作台 / 指标
+```
+
+要点：
+
+- **金路径**：样本 → 运单/子单/轨迹入库 → 异常四要素校验（缺字段进修复队列，不猜值）
+  → 证据包（运单 + 子单 + 轨迹 + 异常 + 数据时间）→ 闸门 → 草稿（带引用）
+  → 人工审核（通过/退回/转人工）→ 审计可重建。
+- 赔付、危险品等红线在生成草稿前拦截，直接转人工，不产出草稿。
+- 指标按 docs/02 §8 口径：到货与回执分开算，越权拦截单列。
+- 消息与审计日志保留 90 天，到期整批清理。
 
 ## 阶段 3 管理后台（可运行）
 

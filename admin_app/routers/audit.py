@@ -106,7 +106,7 @@ def export(request: Request, employee: str = "", date_from: str = "", date_to: s
     rows = db.execute(
         f"""
         SELECT s.id AS session_id, s.user_id, s.lane_scope, s.shipment_no, s.created_at,
-               m.role, m.status, m.content, m.model, m.prompt_version,
+               m.role, m.status, m.content, m.model, m.prompt_version, m.request_id,
                (SELECT GROUP_CONCAT(f.flag_type) FROM conversation_flags f
                 WHERE f.message_id=m.id AND f.revoked_at IS NULL) AS flags
         FROM sessions s JOIN messages m ON m.session_id=s.id
@@ -123,13 +123,14 @@ def export(request: Request, employee: str = "", date_from: str = "", date_to: s
     buffer.write("\ufeff")
     writer = csv.writer(buffer)
     writer.writerow(["会话ID", "员工ID", "线路", "运单号", "会话时间", "角色",
-                     "消息状态", "内容", "模型", "提示词版本", "标记类型"])
+                     "消息状态", "内容", "模型", "提示词版本", "标记类型", "请求ID"])
     for row in rows:
         safe_content, _ = mask_pii(row["content"].replace("\n", " "))
         writer.writerow([row["session_id"], row["user_id"], row["lane_scope"],
                          row["shipment_no"] or "", row["created_at"], row["role"],
                          row["status"], safe_content, row["model"],
-                         row["prompt_version"], row["flags"] or ""])
+                         row["prompt_version"], row["flags"] or "",
+                         row["request_id"] or ""])
     audit(db, user, "audit_export", "audit", "conversations",
           f"导出 {len(rows)} 行", getattr(request.state, "request_id", ""))
     db.commit()
@@ -167,6 +168,19 @@ def audit_detail(request: Request, session_id: str, user=Depends(require_page("a
     flag_map: dict[str, list] = {}
     for f in flags:
         flag_map.setdefault(f["message_id"], []).append(dict(f))
+
+    # 闸门与护栏结果写在 audit_logs 里，详情页要把它们捞出来展示
+    log_rows = db.execute(
+        "SELECT * FROM audit_logs"
+        " WHERE object_id IN (SELECT id FROM messages WHERE session_id=?)"
+        "   AND action IN ('chat.takeover','chat.guardrail','chat.timeout','chat.error')"
+        " ORDER BY created_at",
+        (session_id,),
+    ).fetchall()
+    trace_map: dict[str, list] = {}
+    for row in log_rows:
+        trace_map.setdefault(row["object_id"], []).append(dict(row))
+
     items = []
     for m in messages:
         safe_content, _ = mask_pii(m["content"])
@@ -176,6 +190,7 @@ def audit_detail(request: Request, session_id: str, user=Depends(require_page("a
             "latency_ms": m["latency_ms"], "created_at": m["created_at"],
             "citations": citation_map.get(m["id"], []),
             "flags": flag_map.get(m["id"], []),
+            "trace": trace_map.get(m["id"], []),
         })
     return render(request, user, "audit_detail.html", session=dict(session),
                   items=items, flag_types=FLAG_TYPES)

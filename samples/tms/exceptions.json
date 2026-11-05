@@ -1,0 +1,49 @@
+[
+  {
+    "raw_ref": "exp_001",
+    "shipment_no": "YD20261030001",
+    "sub_no": "YD20261030001-01",
+    "event_type": "延误",
+    "reason_code": "TRAFFIC_CONTROL",
+    "occurred_at": "2026-11-05T08:40:00",
+    "source": "TMS",
+    "source_version": "v1",
+    "handler": "u_sup1",
+    "due_at": "2026-11-05T10:40:00",
+    "note": "封路导致延误，需附路段与封路证明"
+  },
+  {
+    "raw_ref": "exp_002",
+    "shipment_no": "YD20261030001",
+    "sub_no": "YD20261030001-02",
+    "event_type": "货损赔付",
+    "reason_code": "DAMAGE",
+    "occurred_at": "2026-11-05T08:50:00",
+    "source": "TMS",
+    "source_version": "v1",
+    "handler": "",
+    "due_at": "",
+    "note": "客户提出赔付诉求"
+  },
+  {
+    "raw_ref": "exp_003",
+    "shipment_no": "YD20261030002",
+    "sub_no": "YD20261030002-01",
+    "event_type": "回执延迟",
+    "reason_code": "POD_DELAY",
+    "source": "TMS",
+    "source_version": "v1",
+    "note": "缺 occurred_at，应进修复队列"
+  },
+  {
+    "raw_ref": "exp_004",
+    "shipment_no": "YD20261030009",
+    "event_type": "危险品泄漏",
+    "reason_code": "HAZMAT",
+    "occurred_at": "2026-11-05T09:10:00",
+    "source": "TMS",
+    "source_version": "v1",
+    "handler": "",
+    "note": "现场报危险品泄漏"
+  }
+]

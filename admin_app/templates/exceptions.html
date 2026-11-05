@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}异常与修复{% endblock %}
+{% block page_title %}异常事件与修复队列{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>TMS 样本导入</h2>
+      <p class="role-note">
+        读取 <code>samples/tms/</code> 下的脱敏导出样本，模拟 TMS 只读接入：
+        查单入库、异常按四要素归一，缺字段进修复队列（不用推测值补齐）。
+      </p>
+    </div>
+    {% if can('users:manage') %}
+    <form method="post" action="/admin/exceptions/import" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-primary" type="submit">导入样本</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>异常事件（已归一）</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>运单</th><th>子单</th><th>类型</th><th>原因码</th><th>发生时间</th>
+        <th>来源</th><th>处理人</th><th>截止</th><th>状态</th>
+      </tr></thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td class="mono">{{ e.shipment_no }}</td>
+          <td class="mono muted">{{ e.sub_no or '-' }}</td>
+          <td>{{ e.event_type }}</td>
+          <td class="muted">{{ e.reason_code or '-' }}</td>
+          <td class="muted">{{ e.occurred_at|fmt_dt }}</td>
+          <td class="muted">{{ e.source }}{% if e.source_version %} · {{ e.source_version }}{% endif %}</td>
+          <td class="muted">{{ e.handler or '未指派' }}</td>
+          <td class="muted">{{ e.due_at|fmt_dt if e.due_at else '-' }}</td>
+          <td><span class="badge badge-active">{{ e.status }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="muted">还没有异常事件，先导入 TMS 样本。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>修复队列</h2>
+  <p class="role-note">缺四要素之一就无法归一。补齐后才会入库，原始记录保留在队列里。</p>
+  <div class="table-wrap" style="margin-top:12px;">
+    <table class="table">
+      <thead><tr><th>原始编号</th><th>缺失字段</th><th>原始内容</th><th>补齐并归一</th></tr></thead>
+      <tbody>
+        {% for r in repairs %}
+        <tr>
+          <td class="mono">{{ r.raw_ref or r.id }}</td>
+          <td><span class="badge badge-pending">{{ r.missing }}</span></td>
+          <td class="muted small">{{ r.raw_json[:120] }}…</td>
+          <td>
+            {% if can('users:manage') %}
+            <form method="post" action="/admin/exceptions/repair" class="repair-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="queue_id" value="{{ r.id }}">
+              <input type="text" name="shipment_no" placeholder="运单号" required>
+              <input type="text" name="event_type" placeholder="事件类型" required>
+              <input type="text" name="occurred_at" placeholder="发生时间 2026-11-05T08:40:00" required>
+              <input type="text" name="source" placeholder="来源" required>
+              <button class="btn btn-primary btn-sm" type="submit">补齐</button>
+            </form>
+            {% else %}
+            <span class="muted small">需系统管理员处理</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">修复队列为空。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

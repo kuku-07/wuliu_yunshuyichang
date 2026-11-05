@@ -274,6 +274,109 @@ def _history_block(history: list[dict]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 幂等：同一 client_msg_id 重复提交时重放已存结果
+# ---------------------------------------------------------------------------
+
+
+def find_reply(
+    conn: sqlite3.Connection, session_id: str, client_msg_id: str,
+) -> tuple[dict | None, bool]:
+    """返回 (可重放的问答, 是否有未完成的流)。
+
+    有未完成的流说明是并发重复提交，调用方应返回 SESSION_BUSY；
+    已完成/已接管则直接重放，不重复生成、不重复计数。
+    """
+    if not client_msg_id:
+        return None, False
+
+    user_row = conn.execute(
+        "SELECT rowid AS rid, * FROM messages"
+        " WHERE session_id=? AND client_msg_id=? AND role='user'"
+        " ORDER BY rowid DESC LIMIT 1",
+        (session_id, client_msg_id),
+    ).fetchone()
+    if user_row is None:
+        return None, False
+
+    assistant = conn.execute(
+        "SELECT * FROM messages WHERE session_id=? AND role='assistant' AND rowid>?"
+        " ORDER BY rowid LIMIT 1",
+        (session_id, user_row["rid"]),
+    ).fetchone()
+    if assistant is None:
+        return None, False
+    if assistant["status"] == "streaming":
+        return None, True
+    if assistant["status"] not in {"complete", "takeover"}:
+        return None, False
+
+    citations = [
+        dict(row)
+        for row in conn.execute(
+            "SELECT * FROM citations WHERE message_id=?", (assistant["id"],)
+        )
+    ]
+    return {
+        "user": dict(user_row),
+        "assistant": dict(assistant),
+        "citations": citations,
+    }, False
+
+
+def replay_events(reply: dict) -> Iterator[tuple[str, dict]]:
+    """把已存结果重新按 SSE 事件吐一遍。"""
+    user = reply["user"]
+    assistant = reply["assistant"]
+    takeover = assistant["status"] == "takeover"
+
+    yield ("meta", {
+        "request_id": assistant.get("request_id") or "",
+        "session_id": assistant["session_id"],
+        "user_message_id": user["id"],
+        "shipment": None,
+        "replayed": True,
+    })
+    yield ("status", {"stage": "generating", "label": "正在重放已存回答…"})
+
+    if takeover:
+        yield ("takeover", {
+            "reason_code": assistant["intent"],
+            "message": assistant["content"],
+            "matched_terms": [],
+        })
+    else:
+        for piece in _slice_text(assistant["content"]):
+            yield ("delta", {"text": piece})
+        yield ("citations", {
+            "items": [
+                {
+                    "doc_id": c.get("doc_id", ""),
+                    "doc_title": c.get("doc_title", ""),
+                    "version": c.get("doc_version", ""),
+                    "effective_from": c.get("effective_from") or "",
+                    "lane_scope": c.get("lane_scope") or "",
+                    "section": c.get("section", ""),
+                    "chunk_id": c.get("chunk_id", ""),
+                    "quote": c.get("quote", ""),
+                    "score": c.get("score") or 0,
+                }
+                for c in reply["citations"]
+            ],
+        })
+
+    yield ("guardrail", {"passed": True, "needs_review": False, "violations": []})
+    yield ("done", {
+        "assistant_message_id": assistant["id"],
+        "latency_ms": assistant.get("latency_ms") or 0,
+        "prompt_version": assistant.get("prompt_version") or "",
+        "model": assistant.get("model") or "",
+        "data_time": assistant.get("data_time") or "",
+        "takeover": takeover,
+        "replayed": True,
+    })
+
+
+# ---------------------------------------------------------------------------
 # 限流与会话并发
 # ---------------------------------------------------------------------------
 
@@ -338,15 +441,16 @@ def _insert_message(
     conn: sqlite3.Connection, session_id: str, role: str, content: str,
     status: str = "complete", intent: str = "", prompt_version: str = "",
     model: str = "", latency_ms: int | None = None, data_time: str | None = None,
+    client_msg_id: str | None = None, request_id: str = "",
 ) -> str:
     mid = _new_id("m")
     conn.execute(
         "INSERT INTO messages"
         " (id, session_id, client_msg_id, role, content, status, intent, prompt_version,"
-        "  model, data_time, confidence, latency_ms, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (mid, session_id, None, role, content, status, intent, prompt_version,
-         model, data_time, None, latency_ms, now_iso()),
+        "  model, data_time, confidence, latency_ms, created_at, request_id)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (mid, session_id, client_msg_id or None, role, content, status, intent,
+         prompt_version, model, data_time, None, latency_ms, now_iso(), request_id or None),
     )
     return mid
 
@@ -420,6 +524,7 @@ def stream_turn(
     request_id: str,
     shipment_no: str = "",
     shipment_info: dict | None = None,
+    client_msg_id: str = "",
 ) -> Iterator[tuple[str, dict]]:
     """生成 SSE 事件序列。产出 (event, data) 二元组。
 
@@ -437,7 +542,8 @@ def stream_turn(
         history = recent_history(conn, session_id)
         masked_question, pii_hits = mask_pii(question)
         user_msg_id = _insert_message(
-            conn, session_id, "user", masked_question, status="complete"
+            conn, session_id, "user", masked_question, status="complete",
+            client_msg_id=client_msg_id, request_id=request_id,
         )
         _touch_session(conn, session_id)
         if shipment_no:
@@ -465,6 +571,7 @@ def stream_turn(
                 conn, session_id, "assistant", gate["message"], status="takeover",
                 intent=gate["reason_code"], prompt_version=prompt_version, model="未调用",
                 latency_ms=int((time.monotonic() - started) * 1000), data_time=now_iso(),
+                request_id=request_id,
             )
             conn.commit()
             audit(
@@ -516,6 +623,7 @@ def stream_turn(
         assistant_id = _insert_message(
             conn, session_id, "assistant", "", status="streaming",
             prompt_version=prompt_version, model=agent_core.llm_label()[1],
+            request_id=request_id,
         )
         conn.commit()
         yield ("status", {"stage": "generating", "label": "正在生成处置草稿…"})
@@ -523,15 +631,24 @@ def stream_turn(
         try:
             answer = agent_core.build_llm_client().complete(system_prompt, user_prompt)
         except Exception as exc:  # 上游失败不伪造答案
+            reason = str(exc)
+            timed_out = "timed out" in reason.lower() or "timeout" in reason.lower()
             conn.execute(
                 "UPDATE messages SET status='error', latency_ms=? WHERE id=?",
                 (int((time.monotonic() - started) * 1000), assistant_id),
             )
             conn.commit()
-            audit(conn, user, "chat.error", "message", assistant_id, str(exc)[:200], request_id)
+            audit(
+                conn, user, "chat.timeout" if timed_out else "chat.error",
+                "message", assistant_id, reason[:200], request_id,
+            )
             conn.commit()
-            yield ("error", {"code": "LLM_UPSTREAM_ERROR",
-                             "message": f"模型服务异常，本次未生成回答：{exc}", "retryable": True})
+            yield ("error", {
+                "code": "LLM_TIMEOUT" if timed_out else "LLM_UPSTREAM_ERROR",
+                "message": "模型响应超时，请稍后重试" if timed_out
+                           else f"模型服务异常，本次未生成回答：{reason}",
+                "retryable": True,
+            })
             return
 
         emitted = True

@@ -514,3 +514,12 @@ body.chat-page .chat-shell {
 }
 .lane-label select:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(79, 70, 229, .08); }
 .lane-hint { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+/* 主线：修复队列与草稿审核表单 */
+.repair-form, .review-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.repair-form input, .review-form input, .review-form select {
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px;
+  font-size: 12px; font-family: inherit; outline: none;
+}
+.repair-form input { width: 132px; }
+.review-form input { width: 120px; }

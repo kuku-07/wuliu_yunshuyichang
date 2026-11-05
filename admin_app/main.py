@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, db
 from .deps import Forbidden, LoginRequired
-from .routers import audit, auth, chat, data_admin, grants, kb, lanes, prompts, shipments
+from .routers import audit, auth, chat, data_admin, grants, kb, lanes, mainline, prompts, shipments
 from .services import agent_core
 from .web import render
 
@@ -44,6 +44,21 @@ async def lifespan(app: FastAPI):
             conn.close()
     except Exception:  # 预热失败不影响启动，首个提问时还会再试
         logger.warning("检索预加载失败，首个提问可能稍慢", exc_info=True)
+
+    # 90 天留存：启动时清理一次过期数据（docs/02 §7）
+    try:
+        conn = db.connect()
+        try:
+            from .services import retention
+
+            result = retention.purge(conn, None)
+            if result["messages"] or result["logs"]:
+                logger.info("留存清理完成：%s", result)
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("留存清理失败（不影响启动）", exc_info=True)
+
     yield
 
 
@@ -114,6 +129,7 @@ app.include_router(chat.router)
 app.include_router(grants.router)
 app.include_router(shipments.router)
 app.include_router(lanes.router)
+app.include_router(mainline.router)
 app.include_router(data_admin.router)
 app.include_router(kb.router)
 app.include_router(prompts.router)

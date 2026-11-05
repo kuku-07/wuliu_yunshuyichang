@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}查单工作台{% endblock %}
+{% block page_title %}查单草稿工作台{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>选运单 → 看证据 → 生成草稿</h2>
+      <p class="role-note">
+        草稿只基于 TMS 记录与轨迹快照生成，带引用与数据时间；命中红线直接转人工接管。
+      </p>
+    </div>
+  </div>
+  <form class="filters" method="get" action="/admin/workbench">
+    <label>运单号
+      <input type="text" name="shipment_no" value="{{ shipment_no }}" placeholder="例如 YD20261030001">
+    </label>
+    <button class="btn btn-ghost" type="submit">查看证据包</button>
+  </form>
+</div>
+
+{% if evidence %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>运单 {{ evidence.shipment.shipment_no }}</h2>
+      <p class="role-note">
+        客户 {{ evidence.shipment.customer or '未登记' }} ·
+        线路 {{ evidence.shipment.lane_scope }} ·
+        状态 {{ evidence.shipment.status }} ·
+        数据时间 {{ evidence.data_time|fmt_dt }}
+      </p>
+    </div>
+    {% if can('kb:edit') %}
+    <form method="post" action="/admin/workbench/generate" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="shipment_no" value="{{ evidence.shipment.shipment_no }}">
+      <button class="btn btn-primary" type="submit">生成回复草稿</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-item"><div class="k">计划到达</div><div class="v">{{ evidence.shipment.plan_eta|fmt_dt if evidence.shipment.plan_eta else '-' }}</div></div>
+    <div class="meta-item"><div class="k">实际到达</div><div class="v">{{ evidence.shipment.delivered_at|fmt_dt if evidence.shipment.delivered_at else '未到达' }}</div></div>
+    <div class="meta-item"><div class="k">回执</div><div class="v">{{ evidence.shipment.receipt_at|fmt_dt if evidence.shipment.receipt_at else '未回传' }}</div></div>
+    <div class="meta-item"><div class="k">异常条数</div><div class="v">{{ evidence.events|length }}</div></div>
+  </div>
+
+  <h3 style="margin-top:16px;">子单</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>子单号</th><th>承运商</th><th>状态</th></tr></thead>
+      <tbody>
+        {% for s in evidence.sub_shipments %}
+        <tr><td class="mono">{{ s.sub_no }}</td><td>{{ s.carrier or '-' }}</td><td class="muted">{{ s.status }}</td></tr>
+        {% else %}
+        <tr><td colspan="3" class="muted">无子单记录。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:16px;">最近轨迹</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>时间</th><th>状态</th><th>位置</th><th>说明</th></tr></thead>
+      <tbody>
+        {% for t in evidence.tracks %}
+        <tr>
+          <td class="muted">{{ t.at|fmt_dt }}</td>
+          <td>{{ t.status }}</td>
+          <td>{{ t.location or '-' }}</td>
+          <td class="muted">{{ t.note or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">无轨迹快照。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:16px;">异常记录</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>发生时间</th><th>类型</th><th>原因码</th><th>处理人</th><th>截止</th></tr></thead>
+      <tbody>
+        {% for e in evidence.events %}
+        <tr>
+          <td class="muted">{{ e.occurred_at|fmt_dt }}</td>
+          <td>{{ e.event_type }}</td>
+          <td class="muted">{{ e.reason_code or '-' }}</td>
+          <td class="muted">{{ e.handler or '未指派' }}</td>
+          <td class="muted">{{ e.due_at|fmt_dt if e.due_at else '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">该运单暂无异常记录。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% elif shipment_no %}
+<div class="card"><p class="muted">运单 {{ shipment_no }} 不存在，请先在「运单登记」里登记。</p></div>
+{% endif %}
+
+<div class="card">
+  <h2>草稿队列</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>运单</th><th>状态</th><th>内容摘录</th><th>护栏</th><th>生成时间</th><th>审核</th>
+      </tr></thead>
+      <tbody>
+        {% for d in drafts %}
+        <tr>
+          <td class="mono">{{ d.shipment_no }}</td>
+          <td>
+            {% if d.status == 'approved' %}<span class="badge badge-active">已通过</span>
+            {% elif d.status == 'pending_review' %}<span class="badge badge-approved">待审核</span>
+            {% elif d.status == 'needs_recheck' %}<span class="badge badge-pending">需复核</span>
+            {% elif d.status == 'taken_over' %}<span class="badge badge-takeover">已接管</span>
+            {% else %}<span class="badge badge-offline">已退回</span>{% endif %}
+          </td>
+          <td class="muted small">{{ d.content[:60] }}…</td>
+          <td class="muted small">{{ d.guardrail or '通过' }}</td>
+          <td class="muted">{{ d.created_at|fmt_dt }}</td>
+          <td>
+            {% if d.status in ['pending_review', 'needs_recheck'] and can('audit:mark') %}
+            <form method="post" action="/admin/workbench/{{ d.id }}/review" class="review-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <select name="action">
+                <option value="approve">通过</option>
+                <option value="reject">退回</option>
+                <option value="takeover">转人工</option>
+              </select>
+              <input type="text" name="note" placeholder="备注">
+              <button class="btn btn-ghost btn-sm" type="submit">提交</button>
+            </form>
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">还没有草稿。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

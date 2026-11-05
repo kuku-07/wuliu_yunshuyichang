@@ -1,0 +1,18 @@
+{
+  "shipment_no": "YD20261030002",
+  "lane_scope": "试点干线-华东",
+  "customer": "宁波 · 某建材客户",
+  "status": "delivered",
+  "plan_eta": "2026-11-04T15:00:00",
+  "delivered_at": "2026-11-04T14:20:00",
+  "receipt_at": "2026-11-05T10:00:00",
+  "data_time": "2026-11-05T10:05:00",
+  "source": "TMS",
+  "source_version": "export-v1",
+  "sub_shipments": [
+    { "sub_no": "YD20261030002-01", "carrier": "顺丰", "status": "delivered" }
+  ],
+  "tracks": [
+    { "at": "2026-11-04T14:20:00", "status": "delivered", "location": "宁波工地", "note": "收货人签收" }
+  ]
+}

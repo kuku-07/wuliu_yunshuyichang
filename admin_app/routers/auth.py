@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from .. import config
 from ..db import connect, now_iso
@@ -110,6 +111,36 @@ def logout(
     db.commit()
     response = redirect("/admin/login", ok="已退出登录")
     response.delete_cookie(config.COOKIE_NAME, path="/")
+    return response
+
+
+@router.post("/auth/refresh")
+def refresh(
+    request: Request,
+    csrf_token: str = Form(""),
+    user=Depends(require_api()),
+    db=Depends(get_db),
+):
+    """续期：换发新 token（新 jti），旧 token 到期自然失效。"""
+    submitted = csrf_token or request.headers.get("X-CSRF-Token", "")
+    if not check_csrf(request, submitted):
+        raise HTTPException(status_code=403, detail="页面已过期，请刷新后重试")
+
+    token = create_access_token(user["id"], user["role"], user.get("lanes") or [])
+    audit(db, user, "auth_refresh", "admin_user", user["id"], "续期会话",
+          getattr(request.state, "request_id", ""))
+    db.commit()
+
+    response = JSONResponse({
+        "code": "OK",
+        "message": "",
+        "data": {"expires_in": config.TOKEN_TTL_MINUTES * 60, "role": user["role"]},
+        "request_id": getattr(request.state, "request_id", ""),
+    })
+    response.set_cookie(
+        config.COOKIE_NAME, token, httponly=True, samesite="strict",
+        max_age=config.TOKEN_TTL_MINUTES * 60, path="/",
+    )
     return response
 
 

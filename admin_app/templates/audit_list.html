@@ -10,7 +10,8 @@
       <p class="role-note">按员工、时间、线路与标记筛选；内容展示前统一脱敏。</p>
     </div>
     {% if can('audit:export') %}
-    <a class="btn btn-ghost" href="/admin/audit/export?employee={{ filters.employee|urlencode }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}&lane={{ filters.lane|urlencode }}&flag={{ filters.flag }}&takeover={{ filters.takeover }}">导出 CSV</a>
+    <a class="btn btn-ghost" href="/admin/audit/export?employee={{ filters.employee|urlencode }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}&lane={{ filters.lane|urlencode }}&flag={{ filters.flag }}&takeover={{ filters.takeover }}"
+       onclick="return confirm('导出当前筛选结果（最多 5000 条，内容已脱敏）并记入审计，确认？');">导出 CSV</a>
     {% endif %}
   </div>
 

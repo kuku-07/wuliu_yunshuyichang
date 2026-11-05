@@ -45,6 +45,18 @@
       </div>
       {% endif %}
 
+      {% if m.trace %}
+      <div class="citations">
+        {% for t in m.trace %}
+        <div class="citation">
+          <b>{{ '闸门/接管' if t.action == 'chat.takeover' else ('护栏自检' if t.action == 'chat.guardrail' else '模型异常') }}</b>
+          <div class="muted">{{ t.detail }}</div>
+          <div class="muted small">{{ t.created_at|fmt_dt }} · {{ t.request_id or '-' }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
       {% if m.flags %}
       <div class="tags">
         {% for f in m.flags %}
