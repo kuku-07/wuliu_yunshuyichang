@@ -1,49 +1,136 @@
 {% extends "base.html" %}
-{% block title %}异常与修复{% endblock %}
-{% block page_title %}异常事件与修复队列{% endblock %}
+{% block title %}异常与预警{% endblock %}
+{% block page_title %}异常、预警与修复{% endblock %}
 
 {% block content %}
 <div class="card">
   <div class="section-head">
     <div>
-      <h2>TMS 样本导入</h2>
+      <h2>待处置预警</h2>
       <p class="role-note">
-        读取 <code>samples/tms/</code> 下的脱敏导出样本，模拟 TMS 只读接入：
-        查单入库、异常按四要素归一，缺字段进修复队列（不用推测值补齐）。
+        规则：预计超时（计划到达 +30 分钟未签收）、轨迹停滞（&gt;2 小时）、回执超期（&gt;24 小时）、
+        多异常聚集（≥2 条未关闭）。误报率 = 误报 /（确认 + 误报）。
       </p>
     </div>
     {% if can('users:manage') %}
     <form method="post" action="/admin/exceptions/import" class="inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-primary" type="submit">导入样本</button>
+      <button class="btn btn-ghost btn-sm" type="submit">导入 TMS 样本</button>
     </form>
     {% endif %}
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>运单</th><th>类型</th><th>级别</th><th>原因</th><th>生成时间</th><th>处置</th></tr></thead>
+      <tbody>
+        {% for a in alerts %}
+        <tr>
+          <td class="mono">{{ a.shipment_no }}</td>
+          <td>{{ a.alert_type }}</td>
+          <td>
+            {% if a.severity == 'high' %}<span class="badge badge-offline">高</span>
+            {% elif a.severity == 'medium' %}<span class="badge badge-pending">中</span>
+            {% else %}<span class="badge badge-draft">低</span>{% endif %}
+          </td>
+          <td class="muted small">{{ a.reason }}</td>
+          <td class="muted">{{ a.created_at|fmt_dt }}</td>
+          <td>
+            {% if can('kb:edit') %}
+            <form method="post" action="/admin/alerts/{{ a.id }}/review" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <select name="verdict">
+                <option value="confirm">确认</option>
+                <option value="false_positive">误报</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" type="submit">提交</button>
+            </form>
+            {% else %}<span class="muted small">只读</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">没有待处置预警。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 
 <div class="card">
-  <h2>异常事件（已归一）</h2>
+  <div class="section-head">
+    <div>
+      <h2>异常事件</h2>
+      <p class="role-note">
+        首次响应 ≤30 分钟、处置 ≤2 小时，逾期自动升级（页面打开时扫描）。
+      </p>
+    </div>
+    <form class="filters" method="get" action="/admin/exceptions">
+      <label>状态
+        <select name="status">
+          <option value="">全部</option>
+          <option value="normalized" {% if status_filter == 'normalized' %}selected{% endif %}>待受理</option>
+          <option value="escalated" {% if status_filter == 'escalated' %}selected{% endif %}>已升级</option>
+          <option value="accepted" {% if status_filter == 'accepted' %}selected{% endif %}>处理中</option>
+          <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>已关闭</option>
+        </select>
+      </label>
+      <button class="btn btn-ghost" type="submit">筛选</button>
+    </form>
+  </div>
+
   <div class="table-wrap">
     <table class="table">
       <thead><tr>
-        <th>运单</th><th>子单</th><th>类型</th><th>原因码</th><th>发生时间</th>
-        <th>来源</th><th>处理人</th><th>截止</th><th>状态</th>
+        <th>运单 / 子单</th><th>类型</th><th>发生时间</th><th>处理人</th>
+        <th>状态</th><th>受理时间</th><th>操作</th>
       </tr></thead>
       <tbody>
         {% for e in events %}
         <tr>
-          <td class="mono">{{ e.shipment_no }}</td>
-          <td class="mono muted">{{ e.sub_no or '-' }}</td>
-          <td>{{ e.event_type }}</td>
-          <td class="muted">{{ e.reason_code or '-' }}</td>
+          <td class="mono">{{ e.shipment_no }}{% if e.sub_no %}<div class="muted small">{{ e.sub_no }}</div>{% endif %}</td>
+          <td>{{ e.event_type }}<div class="muted small">{{ e.reason_code or '-' }}</div></td>
           <td class="muted">{{ e.occurred_at|fmt_dt }}</td>
-          <td class="muted">{{ e.source }}{% if e.source_version %} · {{ e.source_version }}{% endif %}</td>
           <td class="muted">{{ e.handler or '未指派' }}</td>
-          <td class="muted">{{ e.due_at|fmt_dt if e.due_at else '-' }}</td>
-          <td><span class="badge badge-active">{{ e.status }}</span></td>
+          <td>
+            {% if e.status == 'closed' %}<span class="badge badge-active">已关闭</span>
+            {% elif e.status == 'escalated' %}<span class="badge badge-takeover">已升级</span>
+            {% elif e.status == 'accepted' %}<span class="badge badge-approved">处理中</span>
+            {% else %}<span class="badge badge-pending">待受理</span>{% endif %}
+            {% if e.state.first_overdue %}<div class="muted small">首响超时</div>{% endif %}
+            {% if e.state.resolve_overdue %}<div class="muted small">处置超时</div>{% endif %}
+          </td>
+          <td class="muted">{{ e.accepted_at|fmt_dt if e.accepted_at else '-' }}</td>
+          <td>
+            {% if can('kb:edit') %}
+            <div class="event-actions">
+              {% if not e.accepted_at %}
+              <form method="post" action="/admin/exceptions/{{ e.id }}/accept" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn btn-primary btn-sm" type="submit">受理</button>
+              </form>
+              {% endif %}
+              {% if e.accepted_at and not e.closed_at %}
+              <form method="post" action="/admin/exceptions/{{ e.id }}/close" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="text" name="note" placeholder="处置结论" class="mini-input">
+                <button class="btn btn-ghost btn-sm" type="submit">关闭</button>
+              </form>
+              {% endif %}
+              <form method="post" action="/admin/exceptions/{{ e.id }}/assign" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <select name="handler" class="mini-input">
+                  {% for h in handlers %}
+                  <option value="{{ h.id }}" {% if e.handler == h.id %}selected{% endif %}>{{ h.name }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-ghost btn-sm" type="submit">指派</button>
+              </form>
+            </div>
+            {% else %}<span class="muted small">只读</span>{% endif %}
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="muted">还没有异常事件，先导入 TMS 样本。</td></tr>
+        <tr><td colspan="7" class="muted">还没有异常事件，先导入 TMS 样本。</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -61,7 +148,7 @@
         <tr>
           <td class="mono">{{ r.raw_ref or r.id }}</td>
           <td><span class="badge badge-pending">{{ r.missing }}</span></td>
-          <td class="muted small">{{ r.raw_json[:120] }}…</td>
+          <td class="muted small">{{ r.raw_json[:110] }}…</td>
           <td>
             {% if can('users:manage') %}
             <form method="post" action="/admin/exceptions/repair" class="repair-form">
@@ -69,7 +156,7 @@
               <input type="hidden" name="queue_id" value="{{ r.id }}">
               <input type="text" name="shipment_no" placeholder="运单号" required>
               <input type="text" name="event_type" placeholder="事件类型" required>
-              <input type="text" name="occurred_at" placeholder="发生时间 2026-11-05T08:40:00" required>
+              <input type="text" name="occurred_at" placeholder="发生时间" required>
               <input type="text" name="source" placeholder="来源" required>
               <button class="btn btn-primary btn-sm" type="submit">补齐</button>
             </form>

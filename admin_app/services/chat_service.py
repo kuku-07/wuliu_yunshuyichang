@@ -59,10 +59,16 @@ def default_lane(user: dict) -> str:
 
 
 def available_lanes(conn: sqlite3.Connection, user: dict) -> list[str]:
-    """可选线路名 = 干线管理里启用的干线 ∪ 该账号的线路范围。"""
+    """可选线路名：按账号线路范围过滤（系统管理员不受限）。"""
     from .lanes import options
 
-    names = [row["name"] for row in options(conn, user.get("lanes") or [])]
+    names = [
+        row["name"]
+        for row in options(
+            conn, user.get("lanes") or [],
+            unrestricted=user.get("role") == "sys_admin",
+        )
+    ]
     if not names:
         names.append(default_lane(user))
     return sorted(names)

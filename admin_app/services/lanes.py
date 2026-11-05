@@ -46,9 +46,21 @@ def active_names(conn: sqlite3.Connection) -> list[str]:
     ]
 
 
-def options(conn: sqlite3.Connection, extra: tuple[str, ...] | list[str] = ()) -> list[dict]:
-    """下拉选项：启用的干线（含地区），再补上用户范围里有、但表里没登记的名字。"""
+def options(
+    conn: sqlite3.Connection, extra: tuple[str, ...] | list[str] = (),
+    unrestricted: bool = False,
+) -> list[dict]:
+    """下拉选项：启用的干线（含地区）。
+
+    - `unrestricted=True`（系统管理员）：返回全部启用干线
+    - 否则按账号的线路范围过滤；范围为空的旧账号暂不限制（保持兼容）
+    - `extra` 里有、但表里没登记的线路名也会补进来，避免历史数据选不到
+    """
     rows = list_lanes(conn, include_disabled=False)
+    scopes = [lane for lane in extra if lane]
+    if not unrestricted and scopes:
+        rows = [row for row in rows if row["name"] in scopes]
+
     known = {row["name"] for row in rows}
     for name in extra:
         if name and name not in known:

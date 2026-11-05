@@ -32,6 +32,7 @@
       <a class="nav-item {% if request.url.path.startswith('/admin/releases') %}active{% endif %}" href="/admin/releases">发布记录</a>
       {% if can('users:manage') %}
       <div class="nav-label">权限</div>
+      <a class="nav-item {% if request.url.path.startswith('/admin/users') %}active{% endif %}" href="/admin/users">账号管理</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/lanes') %}active{% endif %}" href="/admin/lanes">干线管理</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/shipments') %}active{% endif %}" href="/admin/shipments">运单登记</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/grants') %}active{% endif %}" href="/admin/grants">运单授权</a>

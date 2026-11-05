@@ -31,6 +31,14 @@
     <div class="meta-item"><div class="k">已签收运单</div><div class="v">{{ stats.delivered }}</div></div>
     <div class="meta-item"><div class="k">到货准时率</div><div class="v">{{ stats.on_time_rate }}%</div></div>
     <div class="meta-item"><div class="k">回执 24h 及时率</div><div class="v">{{ stats.receipt_24h_rate }}%</div></div>
+    <div class="meta-item"><div class="k">已受理异常</div><div class="v">{{ stats.accepted }}</div></div>
+    <div class="meta-item"><div class="k">首响达标率（≤30min）</div><div class="v">{{ stats.first_response_rate }}%</div></div>
+    <div class="meta-item"><div class="k">首响中位数</div><div class="v">{{ stats.median_first_response }} 分钟</div></div>
+    <div class="meta-item"><div class="k">处置达标率（≤2h）</div><div class="v">{{ stats.resolution_rate }}%</div></div>
+    <div class="meta-item"><div class="k">逾期未结</div><div class="v">{{ stats.overdue }}</div></div>
+    <div class="meta-item"><div class="k">已升级</div><div class="v">{{ stats.escalated }}</div></div>
+    <div class="meta-item"><div class="k">待处置预警</div><div class="v">{{ stats.alert_open }}</div></div>
+    <div class="meta-item"><div class="k">预警误报率</div><div class="v">{{ stats.alert_false_positive_rate }}%</div></div>
   </div>
 
   <h3 style="margin-top:18px;">草稿状态分布</h3>

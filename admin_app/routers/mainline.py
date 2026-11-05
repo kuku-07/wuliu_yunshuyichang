@@ -1,25 +1,38 @@
-"""主线三页：异常与修复、查单工作台、指标。"""
+"""主线页面：异常受理、查单工作台、指标。"""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
 
 from ..deps import get_db, require_page
+from ..services import alerts as alert_service
 from ..services import draft as draft_service
 from ..services import metrics as metric_service
 from ..services import retention
 from ..services import tms as tms_service
+from ..services.users import list_users
 from ..web import check_csrf, redirect, render
 
 router = APIRouter(prefix="/admin", tags=["mainline"])
 
 
 @router.get("/exceptions")
-def exceptions_page(request: Request, user=Depends(require_page("kb:read")),
-                    db=Depends(get_db)):
+def exceptions_page(
+    request: Request,
+    status: str = "",
+    user=Depends(require_page("kb:read")),
+    db=Depends(get_db),
+):
+    # 打开页面时顺手扫一次超时与预警，省一个定时任务
+    tms_service.escalate_overdue(db)
+    alert_service.evaluate(db, user if user["role"] != "auditor" else None)
+
     return render(
         request, user, "exceptions.html",
-        events=tms_service.list_events(db),
+        events=tms_service.list_events_with_state(db, status),
         repairs=tms_service.list_repairs(db),
+        alerts=alert_service.list_alerts(db),
+        handlers=[u for u in list_users(db) if u["status"] == "active"],
+        status_filter=status,
     )
 
 
@@ -51,6 +64,49 @@ def repair(request: Request, csrf_token: str = Form(""), queue_id: str = Form(""
         "occurred_at": occurred_at,
         "source": source,
     })
+    return redirect("/admin/exceptions", ok=message if ok else None,
+                    err=None if ok else message)
+
+
+@router.post("/exceptions/{event_id}/accept")
+def accept_event(request: Request, event_id: str, csrf_token: str = Form(""),
+                 user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
+    ok, message = tms_service.accept_event(db, user, event_id)
+    return redirect("/admin/exceptions", ok=message if ok else None,
+                    err=None if ok else message)
+
+
+@router.post("/exceptions/{event_id}/close")
+def close_event(request: Request, event_id: str, csrf_token: str = Form(""),
+                note: str = Form(""),
+                user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
+    ok, message = tms_service.close_event(db, user, event_id, note)
+    return redirect("/admin/exceptions", ok=message if ok else None,
+                    err=None if ok else message)
+
+
+@router.post("/exceptions/{event_id}/assign")
+def assign_event(request: Request, event_id: str, csrf_token: str = Form(""),
+                 handler: str = Form(""),
+                 user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
+    ok, message = tms_service.assign_event(db, user, event_id, handler)
+    return redirect("/admin/exceptions", ok=message if ok else None,
+                    err=None if ok else message)
+
+
+@router.post("/alerts/{alert_id}/review")
+def review_alert(request: Request, alert_id: str, csrf_token: str = Form(""),
+                 verdict: str = Form(""), note: str = Form(""),
+                 user=Depends(require_page("kb:edit")), db=Depends(get_db)):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/exceptions", err="页面已过期，请刷新后重试")
+    ok, message = alert_service.review(db, user, alert_id, verdict, note)
     return redirect("/admin/exceptions", ok=message if ok else None,
                     err=None if ok else message)
 

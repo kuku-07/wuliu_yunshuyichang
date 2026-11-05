@@ -536,3 +536,27 @@ body.chat-page .chat-shell {
 }
 .repair-form input { width: 132px; }
 .review-form input { width: 120px; }
+
+/* 账号管理 / 异常操作 */
+.user-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.user-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.user-no { font-family: "Cascadia Code", Consolas, monospace; font-size: 13px; font-weight: 600; }
+.user-form { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.user-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.user-form input, .user-form select {
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px;
+  font-size: 12px; font-family: inherit; outline: none;
+}
+.user-form input { width: 120px; }
+.user-form select[multiple] { min-width: 170px; }
+.user-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.user-actions input[type=password] {
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 12px; width: 190px;
+}
+
+.event-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.event-actions .mini-input, .event-actions select {
+  border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px;
+  font-size: 12px; width: 96px; font-family: inherit; outline: none;
+}
+.event-actions select { width: 88px; }

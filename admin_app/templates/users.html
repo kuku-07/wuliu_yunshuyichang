@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}账号管理{% endblock %}
+{% block page_title %}账号与角色{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>新建账号</h2>
+  <form method="post" action="/admin/users/create" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>账号（工号）
+      <input type="text" name="employee_no" required maxlength="32" placeholder="例如 rule_admin">
+    </label>
+    <label>姓名
+      <input type="text" name="name" required maxlength="20" placeholder="张敏">
+    </label>
+    <label>角色
+      <select name="role" required>
+        {% for value, label in roles.items() %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>初始密码（至少 {{ min_password }} 位）
+      <input type="password" name="password" required minlength="{{ min_password }}">
+    </label>
+    <label>线路范围（可多选，不选表示暂不限制）
+      <select name="lanes" multiple size="4">
+        {% for lane in lanes %}
+        <option value="{{ lane.name }}">{{ lane.name }}（{{ lane.region or '未填' }}）</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">创建账号</button>
+      <span class="muted">系统管理员不受线路范围限制；其他角色只能看到范围内的干线。</span>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>账号列表</h2>
+  {% for u in users %}
+  <div class="user-card">
+    <div class="user-head">
+      <span class="user-no">{{ u.employee_no }}</span>
+      <span class="badge {{ 'badge-active' if u.status == 'active' else 'badge-offline' }}">
+        {{ '正常' if u.status == 'active' else '停用' }}
+      </span>
+      {% if u.locked_until %}<span class="badge badge-pending">已锁定至 {{ u.locked_until|fmt_dt }}</span>{% endif %}
+      {% if u.failed_count %}<span class="muted small">失败 {{ u.failed_count }} 次</span>{% endif %}
+    </div>
+
+    <form method="post" action="/admin/users/{{ u.id }}/update" class="user-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>姓名 <input type="text" name="name" value="{{ u.name }}" maxlength="20" required></label>
+      <label>角色
+        <select name="role">
+          {% for value, label in roles.items() %}
+          <option value="{{ value }}" {% if u.role == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>状态
+        <select name="status">
+          <option value="active" {% if u.status == 'active' %}selected{% endif %}>正常</option>
+          <option value="disabled" {% if u.status != 'active' %}selected{% endif %}>停用</option>
+        </select>
+      </label>
+      <label>线路范围
+        <select name="lanes" multiple size="3">
+          {% for lane in lanes %}
+          <option value="{{ lane.name }}" {% if lane.name in u.lanes %}selected{% endif %}>{{ lane.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary btn-sm" type="submit">保存</button>
+    </form>
+
+    <div class="user-actions">
+      <form method="post" action="/admin/users/{{ u.id }}/reset" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="password" name="password" minlength="{{ min_password }}"
+               placeholder="新密码（≥{{ min_password }} 位）" required>
+        <button class="btn btn-ghost btn-sm" type="submit">重置密码</button>
+      </form>
+      <form method="post" action="/admin/users/{{ u.id }}/unlock" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost btn-sm" type="submit">解锁</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p class="muted">还没有账号。</p>
+  {% endfor %}
+</div>
+{% endblock %}

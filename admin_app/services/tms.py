@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from .. import config
+from datetime import datetime, timedelta
+
 from ..db import now_iso
 from . import grants as grant_service
 from . import lanes as lane_service
@@ -299,3 +301,145 @@ def list_events(conn: sqlite3.Connection, status: str = "") -> list[dict]:
         params.append(status)
     sql += " ORDER BY occurred_at DESC"
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+# ---------------------------------------------------------------------------
+# 受理 / 关闭 / 超时升级
+# ---------------------------------------------------------------------------
+# 口径来自 docs/02 §4：30 分钟内首次响应，2 小时内给出处置结论，
+# 超时未响应自动升级至客服主管。
+
+FIRST_RESPONSE_MINUTES = 30
+RESOLUTION_MINUTES = 120
+
+
+def _parse(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def event_state(row: dict) -> dict:
+    """给列表用的派生状态：是否超时、是否已升级。"""
+    state = {
+        "label": "待受理" if row.get("status") == "normalized" else
+                 ("已关闭" if row.get("status") == "closed" else "处理中"),
+        "first_overdue": False,
+        "resolve_overdue": False,
+    }
+    now = datetime.now()
+    occurred = _parse(row.get("occurred_at"))
+    accepted = _parse(row.get("accepted_at"))
+    closed = _parse(row.get("closed_at"))
+
+    if occurred and not accepted:
+        state["first_overdue"] = now - occurred > timedelta(minutes=FIRST_RESPONSE_MINUTES)
+    if accepted and not closed:
+        state["resolve_overdue"] = now - accepted > timedelta(minutes=RESOLUTION_MINUTES)
+    if row.get("escalated_at"):
+        state["label"] = "已升级"
+    return state
+
+
+def accept_event(conn: sqlite3.Connection, actor: dict, event_id: str) -> tuple[bool, str]:
+    row = conn.execute("SELECT * FROM exception_events WHERE id=?", (event_id,)).fetchone()
+    if row is None:
+        return False, "异常事件不存在"
+    if row["closed_at"]:
+        return False, "该事件已关闭"
+    if row["accepted_at"]:
+        return False, "该事件已被受理"
+
+    now = now_iso()
+    conn.execute(
+        "UPDATE exception_events SET status='accepted', accepted_at=?, accepted_by=?,"
+        " handler=CASE WHEN handler='' THEN ? ELSE handler END WHERE id=?",
+        (now, actor["id"], actor["id"], event_id),
+    )
+    conn.commit()
+    audit(conn, actor, "event.accept", "exception_event", event_id,
+          f"{row['shipment_no']} {row['event_type']}")
+    conn.commit()
+    return True, "已受理，开始计时"
+
+
+def close_event(
+    conn: sqlite3.Connection, actor: dict, event_id: str, note: str = "",
+) -> tuple[bool, str]:
+    row = conn.execute("SELECT * FROM exception_events WHERE id=?", (event_id,)).fetchone()
+    if row is None:
+        return False, "异常事件不存在"
+    if row["closed_at"]:
+        return False, "该事件已关闭"
+    if not row["accepted_at"]:
+        return False, "请先受理再关闭"
+
+    conn.execute(
+        "UPDATE exception_events SET status='closed', closed_at=?, closed_by=?,"
+        " escalation_note=? WHERE id=?",
+        (now_iso(), actor["id"], (note or "").strip()[:200], event_id),
+    )
+    conn.commit()
+    audit(conn, actor, "event.close", "exception_event", event_id,
+          f"{row['shipment_no']} {row['event_type']}；结论 {note or '-'}")
+    conn.commit()
+    return True, "已关闭"
+
+
+def assign_event(
+    conn: sqlite3.Connection, actor: dict, event_id: str, handler: str,
+) -> tuple[bool, str]:
+    row = conn.execute("SELECT * FROM exception_events WHERE id=?", (event_id,)).fetchone()
+    if row is None:
+        return False, "异常事件不存在"
+    handler = (handler or "").strip()
+    if not handler:
+        return False, "请选择处理人"
+    conn.execute("UPDATE exception_events SET handler=? WHERE id=?", (handler, event_id))
+    conn.commit()
+    audit(conn, actor, "event.assign", "exception_event", event_id,
+          f"{row['shipment_no']} → {handler}")
+    conn.commit()
+    return True, f"已指派给 {handler}"
+
+
+def escalate_overdue(conn: sqlite3.Connection) -> dict:
+    """扫描超时：首次响应 >30 分钟、处置 >2 小时，写升级标记（幂等）。"""
+    now = datetime.now()
+    first, resolve = 0, 0
+    rows = [
+        dict(r) for r in conn.execute(
+            "SELECT * FROM exception_events WHERE closed_at IS NULL AND escalated_at IS NULL"
+        )
+    ]
+    for row in rows:
+        occurred = _parse(row["occurred_at"])
+        accepted = _parse(row["accepted_at"])
+        note = ""
+        if not accepted and occurred and now - occurred > timedelta(
+            minutes=FIRST_RESPONSE_MINUTES
+        ):
+            note = f"首次响应超时（> {FIRST_RESPONSE_MINUTES} 分钟）"
+            first += 1
+        elif accepted and now - accepted > timedelta(minutes=RESOLUTION_MINUTES):
+            note = f"处置超时（> {RESOLUTION_MINUTES} 分钟）"
+            resolve += 1
+        if note:
+            conn.execute(
+                "UPDATE exception_events SET escalated_at=?, escalation_note=?,"
+                " status=CASE WHEN accepted_at IS NULL THEN 'escalated' ELSE status END"
+                " WHERE id=?",
+                (now_iso(), note, row["id"]),
+            )
+    if first or resolve:
+        conn.commit()
+    return {"first_response": first, "resolution": resolve}
+
+
+def list_events_with_state(conn: sqlite3.Connection, status: str = "") -> list[dict]:
+    events = list_events(conn, status)
+    for event in events:
+        event["state"] = event_state(event)
+    return events

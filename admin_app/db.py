@@ -238,6 +238,12 @@ CREATE TABLE IF NOT EXISTS exception_events (
     handler        TEXT NOT NULL DEFAULT '',
     due_at         TEXT,
     status         TEXT NOT NULL DEFAULT 'normalized',
+    accepted_at    TEXT,
+    accepted_by    TEXT,
+    closed_at      TEXT,
+    closed_by      TEXT,
+    escalated_at   TEXT,
+    escalation_note TEXT NOT NULL DEFAULT '',
     raw_ref        TEXT NOT NULL DEFAULT '',
     data_time      TEXT NOT NULL,
     created_at     TEXT NOT NULL
@@ -266,6 +272,20 @@ CREATE TABLE IF NOT EXISTS drafts (
     review_note    TEXT NOT NULL DEFAULT '',
     reviewed_at    TEXT,
     created_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id           TEXT PRIMARY KEY,
+    shipment_no  TEXT NOT NULL,
+    alert_type   TEXT NOT NULL,
+    severity     TEXT NOT NULL DEFAULT 'medium',
+    reason       TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'open',
+    created_at   TEXT NOT NULL,
+    reviewed_at  TEXT,
+    reviewed_by  TEXT,
+    review_note  TEXT NOT NULL DEFAULT '',
+    UNIQUE(shipment_no, alert_type, status)
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
@@ -365,6 +385,18 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("shipments", "plan_eta", "ALTER TABLE shipments ADD COLUMN plan_eta TEXT"),
         ("shipments", "delivered_at", "ALTER TABLE shipments ADD COLUMN delivered_at TEXT"),
         ("shipments", "receipt_at", "ALTER TABLE shipments ADD COLUMN receipt_at TEXT"),
+        ("exception_events", "accepted_at",
+         "ALTER TABLE exception_events ADD COLUMN accepted_at TEXT"),
+        ("exception_events", "accepted_by",
+         "ALTER TABLE exception_events ADD COLUMN accepted_by TEXT"),
+        ("exception_events", "closed_at",
+         "ALTER TABLE exception_events ADD COLUMN closed_at TEXT"),
+        ("exception_events", "closed_by",
+         "ALTER TABLE exception_events ADD COLUMN closed_by TEXT"),
+        ("exception_events", "escalated_at",
+         "ALTER TABLE exception_events ADD COLUMN escalated_at TEXT"),
+        ("exception_events", "escalation_note",
+         "ALTER TABLE exception_events ADD COLUMN escalation_note TEXT NOT NULL DEFAULT ''"),
     ):
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:

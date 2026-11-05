@@ -41,6 +41,7 @@ python prototype/phase1_cli.py                # 交互问答
 | [scripts/smoke_shipments.py](scripts/smoke_shipments.py) | 11 项运单登记测试 |
 | [scripts/smoke_lanes.py](scripts/smoke_lanes.py) | 12 项干线管理测试 |
 | [scripts/smoke_mainline.py](scripts/smoke_mainline.py) | 18 项主线 + 契约测试 |
+| [scripts/smoke_ops.py](scripts/smoke_ops.py) | 9 项账号/线路权限、受理升级、预警测试 |
 | [scripts/smoke_data.py](scripts/smoke_data.py) | 12 项演示数据删除 / 恢复测试 |
 
 ```powershell
@@ -101,6 +102,12 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
 - 赔付、危险品等红线在生成草稿前拦截，直接转人工，不产出草稿。
 - 指标按 docs/02 §8 口径：到货与回执分开算，越权拦截单列。
 - 消息与审计日志保留 90 天，到期整批清理。
+- **异常受理与升级**：受理后开始计时，首次响应 ≤30 分钟、处置 ≤2 小时，
+  逾期自动升级并留原因；支持指派处理人。
+- **异常预警**：预计超时 / 轨迹停滞 / 回执超期 / 多异常聚集四条确定性规则，
+  可确认或标误报，指标页给出误报率。
+- **账号与线路权限**：`/admin/users` 新建账号、改角色与线路范围、重置密码、解锁；
+  非系统管理员的干线下拉按 `lane_scopes` 过滤，切到范围外会被拒绝。
 
 ## 阶段 3 管理后台（可运行）
 
