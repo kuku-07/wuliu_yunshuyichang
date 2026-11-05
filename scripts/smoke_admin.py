@@ -211,6 +211,57 @@ def main() -> None:
         assert denied.json()["code"] == "FORBIDDEN"
         ok("规则管理员重建索引返回 403")
 
+        # 6) 系统管理员：自己新增线路并独立完成规则上线
+        login(client, "sys_admin")
+        page = client.get("/admin/kb/upload")
+        assert page.status_code == 200
+        assert "试点干线-华北" in page.text
+        ok("系统管理员可进入上传页，线路可下拉可选可自填")
+
+        new_lane = "试点干线-华南"
+        body = (
+            "# 华南试点规则\n\n"
+            "## 1. 适用范围\n\n本规则适用于华南试点线路的整车运单。\n\n"
+            "## 2. 异常分类\n\n台风导致的延误归为「天气异常」，需附气象证明。\n"
+        )
+        upload = post(client, "/admin/kb/upload", {
+            "title": "华南试点规则",
+            "lane_scope": new_lane,
+            "effective_from": "2026-11-10",
+        }, files={"file": ("south_rules.md", body.encode("utf-8"), "text/markdown")})
+        assert upload.status_code == 303, upload.text
+        location = unquote(upload.headers["location"])
+        assert "/admin/kb/doc_" in location, location
+        south_id = location.split("?")[0].rsplit("/", 1)[-1]
+        ok(f"系统管理员新增线路「{new_lane}」并生成草稿 {south_id}")
+
+        for action, label in (("submit-review", "提交审核"), ("approve", "批准"), ("publish", "发布")):
+            response = post(client, f"/admin/kb/{south_id}/{action}", {})
+            target = unquote(response.headers.get("location", ""))
+            assert "err=" not in target, f"{label}失败：{target}"
+            ok(f"系统管理员{label}成功（自审自批）")
+
+        detail = client.get(f"/admin/kb/{south_id}")
+        assert detail.status_code == 200 and "已生效" in detail.text
+        ok("新线路规则已生效")
+
+        from admin_app.db import connect as db_connect
+
+        conn = db_connect()
+        try:
+            rows = [r["detail"] for r in conn.execute(
+                "SELECT detail FROM audit_logs WHERE action IN ('kb_approve','kb_publish')"
+                " AND object_id=?", (south_id,)
+            )]
+        finally:
+            conn.close()
+        assert rows and all("自审自批" in row for row in rows), rows
+        ok("自审自批已写入审计（可检索复核）")
+
+        chat_page = client.get("/admin/chat")
+        assert chat_page.status_code == 200 and new_lane in chat_page.text
+        ok("新线路出现在对话页的线路下拉里")
+
     print(f"\n冒烟测试全部通过：{len(STEPS)} 项。临时库 {tmp_dir}")
 
 

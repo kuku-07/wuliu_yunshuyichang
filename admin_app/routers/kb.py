@@ -69,8 +69,18 @@ def kb_list(
 
 
 @router.get("/kb/upload")
-def upload_page(request: Request, user=Depends(require_page("kb:edit"))):
-    return render(request, user, "kb_upload.html", today=datetime.now().strftime("%Y-%m-%d"))
+def upload_page(
+    request: Request,
+    user=Depends(require_page("kb:edit")),
+    db=Depends(get_db),
+):
+    from ..services.shipments import known_lanes
+
+    return render(
+        request, user, "kb_upload.html",
+        today=datetime.now().strftime("%Y-%m-%d"),
+        lanes=known_lanes(db),
+    )
 
 
 @router.post("/kb/upload")
@@ -236,16 +246,23 @@ def approve(request: Request, doc_id: str, csrf_token: str = Form(""),
     doc = _doc_or_404(db, doc_id)
     if doc["status"] != "pending":
         return redirect(f"/admin/kb/{doc_id}", err="只有待审版本可以批准")
-    if doc["submitted_by"] == user["id"]:
+    # 职责分离：默认禁止自审；系统管理员可自审，但会在审计里标成「自审自批」
+    self_reviewed = doc["submitted_by"] == user["id"]
+    if self_reviewed and user["role"] != "sys_admin":
         return redirect(f"/admin/kb/{doc_id}", err="提交人与批准人不能为同一人")
     db.execute(
         "UPDATE kb_documents SET status='approved', approved_by=?, updated_at=? WHERE id=?",
         (user["id"], now_iso(), doc_id),
     )
-    audit(db, user, "kb_approve", "kb_document", doc_id, f"v{doc['current_version']} 批准",
+    audit(db, user, "kb_approve", "kb_document", doc_id,
+          f"v{doc['current_version']} 批准" + ("（系统管理员自审自批）" if self_reviewed else ""),
           getattr(request.state, "request_id", ""))
     db.commit()
-    return redirect(f"/admin/kb/{doc_id}", ok="已批准，等待另一位主管发布")
+    ok_message = (
+        "已批准（系统管理员自审自批，已记入审计）" if self_reviewed
+        else "已批准，等待另一位主管发布"
+    )
+    return redirect(f"/admin/kb/{doc_id}", ok=ok_message)
 
 
 @router.post("/kb/{doc_id}/publish")
@@ -258,7 +275,8 @@ def publish(request: Request, doc_id: str, csrf_token: str = Form(""),
         return redirect(f"/admin/kb/{doc_id}", err="只有已批准版本可以发布")
     if not doc["approved_by"]:
         return redirect(f"/admin/kb/{doc_id}", err="缺少批准人，不能发布")
-    if doc["approved_by"] == user["id"]:
+    self_published = doc["approved_by"] == user["id"]
+    if self_published and user["role"] != "sys_admin":
         return redirect(f"/admin/kb/{doc_id}", err="发布人与批准人不能为同一人")
     count = db.execute(
         "SELECT COUNT(*) FROM kb_chunks WHERE doc_id=? AND version=?",
@@ -285,7 +303,8 @@ def publish(request: Request, doc_id: str, csrf_token: str = Form(""),
     )
     _refresh_index_state(db)
     audit(db, user, "kb_publish", "kb_document", doc_id,
-          f"发布 v{doc['current_version']}，生效 {effective}",
+          f"发布 v{doc['current_version']}，生效 {effective}"
+          + ("（系统管理员自审自批）" if self_published else ""),
           getattr(request.state, "request_id", ""))
     db.commit()
     return redirect(f"/admin/kb/{doc_id}", ok=f"已发布 v{doc['current_version']}，检索已切换")

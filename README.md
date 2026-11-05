@@ -87,7 +87,9 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
 $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_admin.py
 ```
 
-演示密码 `Admin@123456789`。规则发布必须三个人完成：`rule_admin` 提交 → `supervisor` 批准 → `supervisor2` 发布。
+演示密码 `Admin@123456789`。默认规则发布要三个人完成：`rule_admin` 提交 → `supervisor` 批准 → `supervisor2` 发布。
+**系统管理员是例外**：可以独立完成上传、提交、批准、发布（自审自批会写入审计，可检索复核），
+也能新增线路、编辑规则与提示词。要恢复严格分离，删掉 `sys_admin` 的 `kb:approve` / `kb:publish` 即可。
 
 ## 项目原则（先于技术选型）
 

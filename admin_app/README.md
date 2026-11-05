@@ -34,7 +34,11 @@
 | auditor | 王芳 | 合规审计 |
 | sys_admin | 陈磊 | 系统管理员 |
 
-职责分离是强制的：规则由 rule_admin 提交 → supervisor 批准 → **supervisor2** 发布；同一账号无法完成全流程。
+默认职责分离：规则由 rule_admin 提交 → supervisor 批准 → **supervisor2** 发布；同一账号无法完成全流程。
+
+**系统管理员是例外**：可以上传/编辑/提交/批准/发布规则与提示词，也能自审自批，
+但这类操作会在审计里标记「系统管理员自审自批」。要恢复严格三方分离，
+删掉 `deps.py` 中 `sys_admin` 的 `kb:approve` / `kb:publish` / `prompt:publish` 即可。
 
 ## 说明
 

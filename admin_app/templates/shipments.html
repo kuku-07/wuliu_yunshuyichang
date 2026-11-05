@@ -80,11 +80,12 @@
              placeholder="YD + 11 位数字，例如 YD20261030001">
     </label>
     <label>线路
-      <select name="lane_scope" required>
-        {% for lane in lanes %}
-        <option value="{{ lane }}" {% if editing and editing.lane_scope == lane %}selected{% endif %}>{{ lane }}</option>
-        {% endfor %}
-      </select>
+      <input type="text" name="lane_scope" list="lane-choices" required
+             value="{{ editing.lane_scope if editing else (lanes[0] if lanes else '试点干线-华东') }}"
+             placeholder="可输入新线路，例如 试点干线-华南">
+      <datalist id="lane-choices">
+        {% for lane in lanes %}<option value="{{ lane }}"></option>{% endfor %}
+      </datalist>
     </label>
     <label>客户
       <input type="text" name="customer" maxlength="100"

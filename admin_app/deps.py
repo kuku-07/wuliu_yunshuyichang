@@ -28,7 +28,15 @@ PERMS: dict[str, set[str]] = {
         "audit:read", "audit:mark", "audit:export",
     },
     "auditor": {"kb:read", "prompt:read", "audit:read", "audit:mark", "audit:export"},
-    "sys_admin": {"kb:read", "prompt:read", "audit:read", "index:rebuild", "users:manage"},
+    # 系统管理员 = 运维全权：规则库、提示词、审计、索引、账号与数据都要能管。
+    # 注意这会绕过「提交→批准→发布」的三方分离；若要严格分离，把 kb:approve /
+    # kb:publish / prompt:publish 从这里删掉即可。
+    "sys_admin": {
+        "kb:read", "kb:edit", "kb:submit", "kb:approve", "kb:publish", "kb:offline",
+        "prompt:read", "prompt:edit", "prompt:publish",
+        "audit:read", "audit:mark", "audit:export",
+        "index:rebuild", "users:manage",
+    },
 }
 
 ROLE_NAMES = {
