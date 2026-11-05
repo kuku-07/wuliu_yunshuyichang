@@ -33,7 +33,6 @@ def shipments_page(
         status_options=shipment_service.status_options(),
         keyword=keyword,
         status_filter=status,
-        demo=shipment_service.demo_counts(db),
     )
 
 
@@ -67,38 +66,6 @@ def save_shipment(
     return redirect(
         "/admin/shipments",
         ok=f"已保存 {shipment_service.normalize(shipment_no)}",
-    )
-
-
-@router.post("/shipments/purge-demo")
-def purge_demo(
-    request: Request,
-    csrf_token: str = Form(""),
-    user=Depends(require_page("users:manage")),
-    db=Depends(get_db),
-):
-    if not check_csrf(request, csrf_token):
-        return redirect("/admin/shipments", err="页面已过期，请刷新后重试")
-    orders, grants = shipment_service.purge_demo(db, user)
-    return redirect(
-        "/admin/shipments",
-        ok=f"已清除演示数据：运单 {orders} 条、授权 {grants} 条",
-    )
-
-
-@router.post("/shipments/restore-demo")
-def restore_demo(
-    request: Request,
-    csrf_token: str = Form(""),
-    user=Depends(require_page("users:manage")),
-    db=Depends(get_db),
-):
-    if not check_csrf(request, csrf_token):
-        return redirect("/admin/shipments", err="页面已过期，请刷新后重试")
-    orders, grants = shipment_service.restore_demo(db, user)
-    return redirect(
-        "/admin/shipments",
-        ok=f"已恢复演示数据：运单 {orders} 条、授权 {grants} 条",
     )
 
 

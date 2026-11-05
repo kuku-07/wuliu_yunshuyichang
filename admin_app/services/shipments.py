@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from ..db import DEMO_SEED_KEY, now_iso, set_meta
+from ..db import now_iso
 from . import grants as grant_service
 from .audit_log import log as audit
 
@@ -88,17 +88,6 @@ def known_lanes(conn: sqlite3.Connection) -> list[str]:
     return sorted(lanes)
 
 
-def demo_counts(conn: sqlite3.Connection) -> dict:
-    return {
-        "shipments": conn.execute(
-            "SELECT COUNT(*) FROM shipments WHERE is_demo=1"
-        ).fetchone()[0],
-        "grants": conn.execute(
-            "SELECT COUNT(*) FROM authorization_grants WHERE is_demo=1"
-        ).fetchone()[0],
-    }
-
-
 # ---------------------------------------------------------------------------
 # 写操作
 # ---------------------------------------------------------------------------
@@ -167,49 +156,3 @@ def delete(conn: sqlite3.Connection, actor: dict, shipment_no: str) -> tuple[boo
           f"同时清理撤销状态授权 演示={row['is_demo']}")
     conn.commit()
     return True, ""
-
-
-def purge_demo(conn: sqlite3.Connection, actor: dict) -> tuple[int, int]:
-    """一键删除演示运单与演示授权，并记住「已清理」，重启不再回填。
-
-    指向演示运单的**自建授权**也一并删掉：运单都没了，留着授权只会变成孤儿记录。
-    """
-    demo_numbers = [
-        row["shipment_no"]
-        for row in conn.execute("SELECT shipment_no FROM shipments WHERE is_demo=1")
-    ]
-    if demo_numbers:
-        marks = ",".join("?" * len(demo_numbers))
-        grants = conn.execute(
-            f"DELETE FROM authorization_grants"
-            f" WHERE is_demo=1 OR shipment_no IN ({marks})",
-            demo_numbers,
-        ).rowcount
-    else:
-        grants = conn.execute("DELETE FROM authorization_grants WHERE is_demo=1").rowcount
-    shipments = conn.execute("DELETE FROM shipments WHERE is_demo=1").rowcount
-    set_meta(conn, DEMO_SEED_KEY, "purged")
-    conn.commit()
-    audit(conn, actor, "demo.purge", "demo", "shipments+grants",
-          f"运单={shipments} 授权={grants}")
-    conn.commit()
-    return shipments, grants
-
-
-def restore_demo(conn: sqlite3.Connection, actor: dict) -> tuple[int, int]:
-    """把演示运单与授权恢复回来（已存在的同号/同 id 记录不覆盖）。"""
-    from ..db import _seed_grants, _seed_shipments
-
-    created = now_iso()
-    _seed_shipments(conn, created)
-    _seed_grants(conn, created)
-    set_meta(conn, DEMO_SEED_KEY, "seeded")
-    conn.commit()
-    shipments = conn.execute("SELECT COUNT(*) FROM shipments WHERE is_demo=1").fetchone()[0]
-    grants = conn.execute(
-        "SELECT COUNT(*) FROM authorization_grants WHERE is_demo=1"
-    ).fetchone()[0]
-    audit(conn, actor, "demo.restore", "demo", "shipments+grants",
-          f"运单={shipments} 授权={grants}")
-    conn.commit()
-    return shipments, grants

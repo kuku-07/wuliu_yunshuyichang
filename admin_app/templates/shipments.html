@@ -112,22 +112,11 @@
 <div class="card">
   <h2>演示数据</h2>
   <p class="role-note">
-    当前演示运单 {{ demo.shipments }} 条、演示授权 {{ demo.grants }} 条。
-    清除会连同「指向这些运单的自建授权」一起删掉，之后重启不会自动回填；
-    恢复只补回缺失的演示行，不覆盖你自建的数据。
+    演示运单与演示授权默认保留，可以在「数据管理」页逐条删除或按组恢复。
+    本页只负责正式登记与维护；演示行会带「演示」标记。
   </p>
   <div class="form-actions" style="margin-top:12px;">
-    <form method="post" action="/admin/shipments/purge-demo" class="inline-form"
-          onsubmit="return confirm('清除全部演示运单与演示授权？');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-danger" type="submit" {% if not demo.shipments and not demo.grants %}disabled{% endif %}>
-        清除演示数据
-      </button>
-    </form>
-    <form method="post" action="/admin/shipments/restore-demo" class="inline-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-ghost" type="submit">恢复演示数据</button>
-    </form>
+    <a class="btn btn-ghost" href="/admin/data">前往数据管理</a>
   </div>
 </div>
 {% endblock %}

@@ -38,7 +38,8 @@ python prototype/phase1_cli.py                # 交互问答
 | [admin_app/services/agent_core.py](admin_app/services/agent_core.py) | 复用阶段 1 的检索/闸门/护栏，数据源换成 SQLite 知识库 |
 | [admin_app/templates/chat.html](admin_app/templates/chat.html) | 单页聊天界面（打字机、引用面板、接管/复核横幅） |
 | [scripts/smoke_chat.py](scripts/smoke_chat.py) | 24 项验收测试（对照 docs/04 第 6 节） |
-| [scripts/smoke_shipments.py](scripts/smoke_shipments.py) | 16 项运单登记 / 演示数据测试 |
+| [scripts/smoke_shipments.py](scripts/smoke_shipments.py) | 11 项运单登记测试 |
+| [scripts/smoke_data.py](scripts/smoke_data.py) | 12 项演示数据删除 / 恢复测试 |
 
 ```powershell
 .\run_admin.ps1                                  # 登录后左侧「一线问答」
@@ -58,8 +59,10 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
   不检索、不调用模型；授权在「运单授权」页维护（仅系统管理员）。
 - 授权通过后，运单的**客户与在途状态**会作为上下文进入提示词，并在对话页顶部显示；
   这些字段在「运单登记」页维护（登记 / 改客户与状态 / 删除，仅系统管理员）。
-- 演示运单与演示授权带 `is_demo` 标记，可在同一页**一键清除 / 恢复**；
-  清除后重启不会自动回填（状态记在 `app_meta.demo_seed_state`）。
+- 演示数据（规则文档 / 会话 / 账号 / 运单 / 授权）默认保留，全部带 `is_demo` 标记；
+  可在「数据管理」页**逐条删除**，删完还能**按组恢复**，重启不会自动回填。
+- 「提示词模板」里当前生效的话术以**浅色占位文字**显示，输入正式话术后即被替换，
+  不会把提示文字当成正文保存。
 - 每次问答都落 `messages` / `citations` / `audit_logs`，「对话审计」页看到的是真实会话。
 - 没有 `LLM_API_KEY` 时走离线抽取（`OfflineExtractiveLLM`），只验证检索与引用完整性；
   配置 `LLM_PROVIDER=openai_compatible` + `LLM_API_KEY` 后才由真模型生成。

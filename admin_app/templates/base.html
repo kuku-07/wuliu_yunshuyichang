@@ -30,6 +30,7 @@
       <div class="nav-label">权限</div>
       <a class="nav-item {% if request.url.path.startswith('/admin/shipments') %}active{% endif %}" href="/admin/shipments">运单登记</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/grants') %}active{% endif %}" href="/admin/grants">运单授权</a>
+      <a class="nav-item {% if request.url.path.startswith('/admin/data') %}active{% endif %}" href="/admin/data">数据管理</a>
       {% endif %}
     </nav>
 

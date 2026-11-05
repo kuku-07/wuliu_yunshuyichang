@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}数据管理{% endblock %}
+{% block page_title %}数据管理{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>演示数据</h2>
+      <p class="role-note">
+        演示数据默认保留，需要时逐条删减；删除后可按组恢复，恢复只补缺失的行，不覆盖自建数据。
+        每行都带 <span class="badge badge-draft">演示</span> 标记，删除只针对这些行。
+      </p>
+    </div>
+  </div>
+  <div class="meta-grid">
+    <div class="meta-item"><div class="k">演示规则文档</div><div class="v">{{ overview.docs }}</div></div>
+    <div class="meta-item"><div class="k">演示会话</div><div class="v">{{ overview.sessions }}</div></div>
+    <div class="meta-item"><div class="k">演示账号</div><div class="v">{{ overview.users }}</div></div>
+    <div class="meta-item"><div class="k">演示运单</div><div class="v">{{ overview.shipments }}</div></div>
+    <div class="meta-item"><div class="k">演示授权</div><div class="v">{{ overview.grants }}</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>规则文档</h2>
+      <p class="role-note">删除会连带切片与版本，并重算生效切片数；对话检索立即失效。</p>
+    </div>
+    <form method="post" action="/admin/data/docs/restore" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-ghost btn-sm" type="submit">恢复该组</button>
+    </form>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>文档</th><th>线路</th><th>生效版本</th><th>状态</th><th>切片</th><th></th></tr></thead>
+      <tbody>
+        {% for d in docs %}
+        <tr>
+          <td>{{ d.title }} <span class="muted small mono">{{ d.id }}</span></td>
+          <td class="muted">{{ d.lane_scope }}</td>
+          <td>{{ ('v' ~ d.active_version) if d.active_version else '-' }}</td>
+          <td><span class="badge badge-{{ d.status }}">{{ status_text(d.status) }}</span></td>
+          <td class="num">{{ d.chunk_count }}</td>
+          <td>
+            <form method="post" action="/admin/data/docs/delete" class="inline-form"
+                  onsubmit="return confirm('删除演示规则文档「{{ d.title }}」？');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="item_id" value="{{ d.id }}">
+              <button class="btn btn-danger btn-sm" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">没有演示规则文档了。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>演示会话</h2>
+      <p class="role-note">删除会连带该会话的消息、引用与标记，审计页随即不再显示。</p>
+    </div>
+    <form method="post" action="/admin/data/sessions/restore" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-ghost btn-sm" type="submit">恢复该组</button>
+    </form>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>会话</th><th>用户</th><th>运单</th><th>消息</th><th>开始时间</th><th></th></tr></thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td class="mono">{{ s.id }}</td>
+          <td class="muted">{{ s.user_id }}</td>
+          <td class="mono">{{ s.shipment_no or '-' }}</td>
+          <td class="num">{{ s.msg_count }}</td>
+          <td class="muted">{{ s.created_at|fmt_dt }}</td>
+          <td>
+            <form method="post" action="/admin/data/sessions/delete" class="inline-form"
+                  onsubmit="return confirm('删除演示会话 {{ s.id }} 及其消息？');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="item_id" value="{{ s.id }}">
+              <button class="btn btn-danger btn-sm" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">没有演示会话了。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>演示账号</h2>
+      <p class="role-note">删除会连带该账号的会话与授权；不能删当前登录账号，也不能删掉最后一个系统管理员。</p>
+    </div>
+    <form method="post" action="/admin/data/users/restore" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-ghost btn-sm" type="submit">恢复该组</button>
+    </form>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>状态</th><th></th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td class="mono">{{ u.employee_no }} <span class="muted small">{{ u.id }}</span></td>
+          <td>{{ u.name }}</td>
+          <td>{{ u.role }}</td>
+          <td><span class="badge {{ 'badge-active' if u.status == 'active' else 'badge-offline' }}">{{ u.status }}</span></td>
+          <td>
+            <form method="post" action="/admin/data/users/delete" class="inline-form"
+                  onsubmit="return confirm('删除演示账号 {{ u.employee_no }}？相关会话与授权会一起删除。');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="item_id" value="{{ u.id }}">
+              <button class="btn btn-danger btn-sm" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">没有演示账号了。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>演示运单与授权</h2>
+      <p class="role-note">删除演示运单会连带它的授权；恢复授权时会先补齐运单。</p>
+    </div>
+    <div class="inline-actions">
+      <form method="post" action="/admin/data/shipments/restore" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost btn-sm" type="submit">恢复运单</button>
+      </form>
+      <form method="post" action="/admin/data/grants/restore" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost btn-sm" type="submit">恢复授权</button>
+      </form>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>类型</th><th>对象</th><th>线路 / 被授权人</th><th>状态</th><th></th></tr></thead>
+      <tbody>
+        {% for s in shipments %}
+        <tr>
+          <td><span class="badge badge-draft">运单</span></td>
+          <td class="mono">{{ s.shipment_no }}</td>
+          <td class="muted">{{ s.lane_scope }} · {{ s.customer or '-' }}</td>
+          <td class="muted">{{ s.status_text }}</td>
+          <td>
+            <form method="post" action="/admin/data/shipments/delete" class="inline-form"
+                  onsubmit="return confirm('删除演示运单 {{ s.shipment_no }} 及其授权？');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="item_id" value="{{ s.shipment_no }}">
+              <button class="btn btn-danger btn-sm" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        {% for g in grants %}
+        <tr>
+          <td><span class="badge badge-draft">授权</span></td>
+          <td class="mono">{{ g.shipment_no }}</td>
+          <td class="muted">{{ g.user_name or g.user_id }}</td>
+          <td>
+            {% if g.status == 'active' %}<span class="badge badge-active">生效中</span>
+            {% else %}<span class="badge badge-offline">已撤销</span>{% endif %}
+          </td>
+          <td>
+            <form method="post" action="/admin/data/grants/delete" class="inline-form"
+                  onsubmit="return confirm('删除演示授权 {{ g.id }}？');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="item_id" value="{{ g.id }}">
+              <button class="btn btn-danger btn-sm" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not shipments and not grants %}
+        <tr><td colspan="5" class="muted">没有演示运单或授权了。</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

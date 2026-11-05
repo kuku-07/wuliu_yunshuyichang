@@ -70,7 +70,10 @@ def save_draft(request: Request, template_id: str, editable_section: str = Form(
     template = _template_or_404(db, template_id)
     editable = editable_section.strip()
     if not editable:
-        return redirect("/admin/prompts", err="可编辑段不能为空")
+        return redirect(
+            "/admin/prompts",
+            err="话术段是空的：浅色文字只是当前生效版本的提示，请先输入正式话术再保存",
+        )
 
     errors = prompt_service.validate_editable(editable, template["locked_section"])
     if errors:

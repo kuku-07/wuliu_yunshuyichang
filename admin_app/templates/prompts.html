@@ -31,8 +31,13 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label class="field">
       <span>话术与输出结构</span>
-      <textarea name="editable_section" {% if not can('prompt:edit') %}disabled{% endif %}>{{ draft.editable_section if draft else template.editable_section }}</textarea>
+      <textarea name="editable_section"
+                {% if not can('prompt:edit') %}disabled{% endif %}
+                placeholder="{{ template.editable_section }}">{% if draft %}{{ draft.editable_section }}{% endif %}</textarea>
     </label>
+    <p class="role-note">
+      浅色文字是当前生效版本，仅作提示；一旦输入自己的内容就会被替换，不会把提示当正文保存。
+    </p>
     <div class="form-actions">
       {% if can('prompt:edit') %}
       <button class="btn btn-primary" type="submit">保存为草稿</button>
