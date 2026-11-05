@@ -68,7 +68,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>干线名称
       <input type="text" name="name" required maxlength="40"
-             placeholder="例如：试点干线 / 华南快线（不必带地区）">
+             placeholder="试点干线 / 华南快线">
     </label>
     <label>所属地区
       <select name="region" required>
@@ -78,7 +78,7 @@
       </select>
     </label>
     <label>备注（可选）
-      <input type="text" name="note" maxlength="100" placeholder="例如：广州、深圳、东莞">
+      <input type="text" name="note" maxlength="100" placeholder="广州、深圳、东莞">
     </label>
     <div class="form-actions">
       <button class="btn btn-primary" type="submit">新建干线</button>
