@@ -503,3 +503,14 @@ body.chat-page .chat-shell {
   border-radius: 14px 14px 0 0;
   border-bottom: 0;
 }
+
+/* 线路选择 */
+.lane-form { margin: 0; }
+.lane-label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); }
+.lane-label select {
+  width: 100%; border: 1px solid var(--line); border-radius: 9px;
+  padding: 6px 8px; font-size: 12px; font-family: inherit; color: #374151;
+  background: #fff; cursor: pointer; outline: none;
+}
+.lane-label select:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(79, 70, 229, .08); }
+.lane-hint { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.4; }

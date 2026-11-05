@@ -61,14 +61,36 @@ def login(client: TestClient, employee_no: str) -> None:
     assert "admin_token" in client.cookies, f"{employee_no} 登录未下发 token"
 
 
-def ask(client: TestClient, session_id: str, question: str) -> list[str]:
+def ask(client: TestClient, session_id: str, question: str) -> list[tuple[str, dict]]:
     with client.stream(
         "POST", "/admin/api/chat/stream",
         data={"question": question, "session_id": session_id, "csrf_token": csrf(client)},
     ) as response:
         if response.status_code != 200:
-            return [f"HTTP{response.status_code}"]
-        return [line[7:].strip() for line in response.iter_lines() if line.startswith("event: ")]
+            return [("http_error", {"status": response.status_code})]
+        events: list[tuple[str, dict]] = []
+        name = None
+        for line in response.iter_lines():
+            if line.startswith("event: "):
+                name = line[7:].strip()
+            elif line.startswith("data: ") and name:
+                try:
+                    events.append((name, json.loads(line[6:])))
+                except ValueError:
+                    events.append((name, {}))
+                name = None
+        return events
+
+
+def event_names(events: list[tuple[str, dict]]) -> list[str]:
+    return [name for name, _ in events]
+
+
+def cited_titles(events: list[tuple[str, dict]]) -> list[str]:
+    for name, data in events:
+        if name == "citations":
+            return [item.get("doc_title", "") for item in data.get("items", [])]
+    return []
 
 
 def counts() -> dict:
@@ -107,7 +129,7 @@ def main() -> int:
 
     # ---- 2. 默认保留 ----
     before = counts()
-    if before != {"docs": 1, "sessions": 3, "users": 5, "shipments": 3, "grants": 5}:
+    if before != {"docs": 2, "sessions": 3, "users": 5, "shipments": 3, "grants": 5}:
         fail("演示数据默认保留", json.dumps(before))
     ok("演示数据默认保留（文档 1 / 会话 3 / 账号 5 / 运单 3 / 授权 5）")
 
@@ -134,22 +156,28 @@ def main() -> int:
         fail("恢复演示会话", str(counts()))
     ok("删除演示会话连带消息；恢复后回到 3 个")
 
-    # ---- 4. 删文档：检索立即失效，恢复后恢复 ----
+    # ---- 4. 删文档：该线路检索失效，恢复后恢复 ----
     rule = TestClient(app)
     login(rule, "rule_admin")
     session_id = re.search(r'data-session="([^"]+)"', rule.get("/admin/chat").text).group(1)
-    if "delta" not in ask(rule, session_id, "客户临时改地址，异常应归为哪一类？"):
+    if "delta" not in event_names(ask(rule, session_id, "客户临时改地址，异常应归为哪一类？")):
         fail("删除前可以正常回答", "没有 delta")
 
     admin.post("/admin/data/docs/delete", data={"csrf_token": csrf(admin), "item_id": "doc_001"},
                follow_redirects=False)
-    if "error" not in ask(rule, session_id, "客户临时改地址，异常应归为哪一类？"):
-        fail("删除演示文档后检索不可用", "未返回 error 事件")
-    ok("删除演示文档后对话返回 KNOWLEDGE_UNAVAILABLE 错误事件")
+    events = ask(rule, session_id, "客户临时改地址，异常应归为哪一类？")
+    if cited_titles(events):
+        fail("删除演示文档后该线路无引用", str(cited_titles(events)))
+    if not any(name == "guardrail" and data.get("needs_review")
+               for name, data in events):
+        fail("无引用时应标记需人工复核", str(event_names(events)))
+    ok("删除演示文档后该线路无引用，回答标记需人工复核")
 
     admin.post("/admin/data/docs/restore", data={"csrf_token": csrf(admin)},
                follow_redirects=False)
-    if counts()["docs"] != 1 or "delta" not in ask(rule, session_id, "客户临时改地址，异常应归为哪一类？"):
+    if counts()["docs"] != 2 or "delta" not in event_names(
+        ask(rule, session_id, "客户临时改地址，异常应归为哪一类？")
+    ):
         fail("恢复演示文档后可检索", str(counts()))
     ok("恢复演示文档后检索恢复，对话正常出 delta")
 

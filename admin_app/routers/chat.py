@@ -60,7 +60,7 @@ def chat_page(
         session=current,
         sessions=chat_service.list_sessions(db, user["id"]),
         messages=messages,
-        lanes=[current["lane_scope"]],
+        lanes=chat_service.available_lanes(db, user),
         suggestions=chat_service.SUGGESTIONS,
         question_max=chat_service.QUESTION_MAX,
     )
@@ -77,6 +77,24 @@ def new_session(
         return redirect("/admin/chat", err="页面已过期，请刷新后重试")
     session = chat_service.create_session(db, user)
     return redirect("/admin/chat", ok=f"已新建会话 · {session['id']}")
+
+
+@router.post("/chat/lane")
+def switch_lane(
+    request: Request,
+    csrf_token: str = Form(""),
+    session_id: str = Form(""),
+    lane_scope: str = Form(""),
+    user=Depends(require_page()),
+    db=Depends(get_db),
+):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/chat", err="页面已过期，请刷新后重试")
+    ok, error = chat_service.set_session_lane(db, user, session_id, lane_scope)
+    target = f"/admin/chat?session={session_id}" if session_id else "/admin/chat"
+    if not ok:
+        return redirect(target, err=error)
+    return redirect(target, ok=f"作业线路已切换为 {lane_scope}")
 
 
 @router.post("/chat/{session_id}/delete")

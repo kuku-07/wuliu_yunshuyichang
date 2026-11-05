@@ -83,6 +83,9 @@ def known_lanes(conn: sqlite3.Connection) -> list[str]:
     for row in conn.execute("SELECT DISTINCT lane_scope FROM shipments"):
         if row["lane_scope"]:
             lanes.add(row["lane_scope"])
+    for row in conn.execute("SELECT DISTINCT lane_scope FROM kb_documents"):
+        if row["lane_scope"]:
+            lanes.add(row["lane_scope"])
     if not lanes:
         lanes.add("试点干线-华东")
     return sorted(lanes)

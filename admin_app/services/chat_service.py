@@ -58,19 +58,65 @@ def default_lane(user: dict) -> str:
     return lanes[0] if lanes else "试点干线-华东"
 
 
+def available_lanes(conn: sqlite3.Connection, user: dict) -> list[str]:
+    """可选线路 = 系统已知线路（运单 / 规则 / 用户范围）的并集。
+
+    目前 `lane_scopes` 只用于取默认值，没有强制校验——系统还没有用户管理页，
+    真要做线路级授权时需要在这里收紧。
+    """
+    from .shipments import known_lanes
+
+    lanes = set(known_lanes(conn))
+    lanes.update(lane for lane in (user.get("lanes") or []) if lane)
+    return sorted(lanes)
+
+
+def latest_lane(conn: sqlite3.Connection, user: dict) -> str:
+    """新建会话时沿用最近一个会话的线路，避免每次都要重选。"""
+    row = conn.execute(
+        "SELECT lane_scope FROM sessions WHERE user_id=?"
+        " ORDER BY last_active_at DESC, rowid DESC LIMIT 1",
+        (user["id"],),
+    ).fetchone()
+    return (row["lane_scope"] if row and row["lane_scope"] else default_lane(user))
+
+
+def set_session_lane(
+    conn: sqlite3.Connection, user: dict, session_id: str, lane_scope: str,
+) -> tuple[bool, str]:
+    """切换会话的作业线路。之后的检索与运单预检都按新线路走。"""
+    row = get_session(conn, session_id)
+    if row is None:
+        return False, "会话不存在"
+    if row["user_id"] != user["id"]:
+        return False, "无权修改该会话"
+
+    lane = (lane_scope or "").strip()
+    if lane not in available_lanes(conn, user):
+        return False, "线路不存在或不可用"
+
+    conn.execute("UPDATE sessions SET lane_scope=? WHERE id=?", (lane, session_id))
+    conn.commit()
+    audit(conn, user, "chat.lane.switch", "session", session_id,
+          f"线路 {row['lane_scope']} → {lane}")
+    conn.commit()
+    return True, ""
+
+
 def create_session(
     conn: sqlite3.Connection, user: dict, lane_scope: str | None = None,
     shipment_no: str | None = None,
 ) -> dict:
     sid = _new_id("s")
     now = now_iso()
+    lane = lane_scope or latest_lane(conn, user)
     conn.execute(
         "INSERT INTO sessions (id, user_id, lane_scope, shipment_no, status, created_at, last_active_at)"
         " VALUES (?,?,?,?,'active',?,?)",
-        (sid, user["id"], lane_scope or default_lane(user), shipment_no or None, now, now),
+        (sid, user["id"], lane, shipment_no or None, now, now),
     )
     conn.commit()
-    audit(conn, user, "chat.session.create", "session", sid, f"线路={lane_scope or default_lane(user)}")
+    audit(conn, user, "chat.session.create", "session", sid, f"线路={lane}")
     conn.commit()
     return dict(conn.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone())
 
@@ -78,7 +124,7 @@ def create_session(
 def get_or_create_session(conn: sqlite3.Connection, user: dict) -> dict:
     row = conn.execute(
         "SELECT * FROM sessions WHERE user_id=? AND status='active'"
-        " ORDER BY last_active_at DESC LIMIT 1",
+        " ORDER BY last_active_at DESC, rowid DESC LIMIT 1",
         (user["id"],),
     ).fetchone()
     if row:
@@ -100,7 +146,7 @@ def list_sessions(conn: sqlite3.Connection, user_id: str, limit: int = 50) -> li
         "    ORDER BY m.created_at, m.rowid LIMIT 1) AS first_question,"
         "  (SELECT COUNT(*) FROM messages m WHERE m.session_id=s.id) AS msg_count"
         " FROM sessions s WHERE s.user_id=?"
-        " ORDER BY s.last_active_at DESC, s.created_at DESC LIMIT ?",
+        " ORDER BY s.last_active_at DESC, s.rowid DESC LIMIT ?",
         (user_id, limit),
     ).fetchall()
     sessions = []
@@ -438,15 +484,14 @@ def stream_turn(
             return
 
         # ---- 2. 检索 ----
-        retriever = agent_core.get_retriever(conn)
-        if retriever is None:
+        hits = agent_core.search(conn, question, lane_scope=lane_scope)
+        if hits is None:
             yield ("error", {"code": "KNOWLEDGE_UNAVAILABLE",
                              "message": "规则库暂不可用（没有生效的规则切片），请稍后重试",
                              "retryable": True})
             return
 
         cfg = agent_core.app_config()
-        hits = retriever.search(question, top_k=cfg.top_k, lane_scope=lane_scope)
 
         # ---- 3. 生成 ----
         context_block = agent_core.build_context_block(hits)

@@ -423,6 +423,54 @@ def main() -> int:
         fail("删除会话后列表不再包含", new_id)
     ok("删除会话后从列表消失")
 
+    # ---- 13. 作业线路可切换 ----
+    page = client.get("/admin/chat")
+    options = re.findall(r'<option value="([^"]+)"', page.text)
+    if "试点干线-华北" not in options:
+        fail("线路下拉包含多条线路", str(options))
+    ok(f"线路下拉可选：{', '.join(options)}")
+
+    def cites_for(question: str) -> list[str]:
+        status, events, _ = ask(client, session_id, question)
+        if status != 200:
+            fail("切换线路后提问", str(events))
+        for name, data, _t in events:
+            if name == "citations":
+                return [item["doc_title"] for item in data.get("items", [])]
+        return []
+
+    client.post(
+        "/admin/chat/lane",
+        data={"csrf_token": csrf(client), "session_id": session_id,
+              "lane_scope": "试点干线-华北"},
+        follow_redirects=False,
+    )
+    north = cites_for("卸货排队超过 4 小时算异常吗？")
+    if not any("华北" in title for title in north):
+        fail("切到华北后应引用华北规则", str(north))
+    ok("切到华北：检索命中华北规则")
+
+    client.post(
+        "/admin/chat/lane",
+        data={"csrf_token": csrf(client), "session_id": session_id,
+              "lane_scope": "试点干线-华东"},
+        follow_redirects=False,
+    )
+    east = cites_for("卸货排队超过 4 小时算异常吗？")
+    if not east or any("华北" in title for title in east):
+        fail("切回华东后应引用华东规则", str(east))
+    ok("切回华东：检索命中华东规则")
+
+    bad = client.post(
+        "/admin/chat/lane",
+        data={"csrf_token": csrf(client), "session_id": session_id,
+              "lane_scope": "不存在的线路"},
+        follow_redirects=False,
+    )
+    if "err=" not in bad.headers.get("location", ""):
+        fail("不存在的线路应被拒绝", bad.headers.get("location", ""))
+    ok("切换到不存在的线路 → 被拒绝")
+
     print()
     print(f"全部通过：{len(STEPS)} 项")
     return 0

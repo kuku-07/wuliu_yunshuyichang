@@ -11,7 +11,6 @@ from __future__ import annotations
 import sqlite3
 
 from ..db import (
-    DEMO_DOC,
     _seed_audit_sessions,
     _seed_grants,
     _seed_rule_doc,

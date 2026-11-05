@@ -22,7 +22,7 @@
       <div class="sider-item {% if s.id == session.id %}active{% endif %}">
         <a class="sider-link" href="/admin/chat?session={{ s.id }}">
           <span class="sider-text">{{ s.title }}</span>
-          <span class="sider-meta">{{ s.msg_count }} 条 · {{ s.last_active_at|fmt_dt }}</span>
+          <span class="sider-meta">{{ s.msg_count }} 条 · {{ s.lane_scope }}</span>
         </a>
         <form method="post" action="/admin/chat/{{ s.id }}/delete" class="sider-del"
               onsubmit="return confirm('删除会话「{{ s.title }}」及其全部消息？');">
@@ -35,7 +35,19 @@
       {% endfor %}
     </div>
     <div class="sider-foot">
-      <span class="chip chip-lane">线路 · {{ lanes[0] }}</span>
+      <form method="post" action="/admin/chat/lane" class="lane-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="session_id" value="{{ session.id }}">
+        <label class="lane-label">
+          <span>作业线路</span>
+          <select name="lane_scope" onchange="this.form.submit()">
+            {% for lane in lanes %}
+            <option value="{{ lane }}" {% if lane == session.lane_scope %}selected{% endif %}>{{ lane }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </form>
+      <p class="lane-hint">切换后检索范围与运单校验都按该线路走</p>
     </div>
   </aside>
 

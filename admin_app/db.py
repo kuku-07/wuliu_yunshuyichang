@@ -316,7 +316,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
             f"UPDATE sessions SET is_demo=1 WHERE id IN ({marks})",
             tuple(item[0] for item in DEMO_SESSIONS),
         )
-    conn.execute("UPDATE kb_documents SET is_demo=1 WHERE id=?", (DEMO_DOC[0],))
+    for doc in DEMO_DOCS:
+        conn.execute("UPDATE kb_documents SET is_demo=1 WHERE id=?", (doc["id"],))
 
 
 # ---------------------------------------------------------------------------
@@ -333,15 +334,37 @@ DEMO_USERS = [
     ("u_sys", "sys_admin", "陈磊", "sys_admin", ["试点干线-华东"]),
 ]
 
-DEMO_DOC = ("doc_001", "运输异常处置与签收协作规则（试点版）", "试点干线-华东", "0.1", "2026-11-01")
-
-DEMO_CHUNKS = [
-    ("1. 适用范围", "本规则适用于试点干线-华东的整车与零担运单，覆盖在途、到货、回执与异常升级环节。未纳入试点的线路仍按原流程执行。"),
-    ("2. 异常分类", "异常分为固定核心类型：延误、货损、货差、拒收、地址变更、单证缺失。核心类型不可自定义；细分原因以原因码记录，原因码可由规则管理员新增，但不得改变核心类型。"),
-    ("2. 异常分类", "客户临时改地址属于「地址变更」，不是「延误」；卸货排队超过 4 小时属于「延误」并需记录排队起止时间；封路导致无法通行属于「延误」，需附路段与封路证明。"),
-    ("3. 到货与回执口径", "到货准时率按运单承诺到达时间计算，分母为应到运单数；回执及时率按签收后回传时间计算，分母为已签收运单数。两者不可互相替代，也不得用回执时间反推到货时间。"),
-    ("4. 签收与证据要求", "签收必须有收货人签字或电子签收记录，并附货物外观照片至少 2 张；代收需提供代收授权。缺少签字、照片或授权的签收，一律标记为「未取证签收」，不得直接关闭异常。"),
-    ("5. 交接与升级", "异常处理人需在 30 分钟内首次响应，2 小时内给出处置结论。超时未响应自动升级至客服主管。涉及赔付、危险品、人员受伤、对外承诺的，不得由智能体处理，必须转人工接管。"),
+DEMO_DOCS = [
+    {
+        "id": "doc_001",
+        "title": "运输异常处置与签收协作规则（试点版）",
+        "lane": "试点干线-华东",
+        "version": "0.1",
+        "effective_from": "2026-11-01",
+        "published_by": "u_sup2",
+        "chunks": [
+            ("1. 适用范围", "本规则适用于试点干线-华东的整车与零担运单，覆盖在途、到货、回执与异常升级环节。未纳入试点的线路仍按原流程执行。"),
+            ("2. 异常分类", "异常分为固定核心类型：延误、货损、货差、拒收、地址变更、单证缺失。核心类型不可自定义；细分原因以原因码记录，原因码可由规则管理员新增，但不得改变核心类型。"),
+            ("2. 异常分类", "客户临时改地址属于「地址变更」，不是「延误」；卸货排队超过 4 小时属于「延误」并需记录排队起止时间；封路导致无法通行属于「延误」，需附路段与封路证明。"),
+            ("3. 到货与回执口径", "到货准时率按运单承诺到达时间计算，分母为应到运单数；回执及时率按签收后回传时间计算，分母为已签收运单数。两者不可互相替代，也不得用回执时间反推到货时间。"),
+            ("4. 签收与证据要求", "签收必须有收货人签字或电子签收记录，并附货物外观照片至少 2 张；代收需提供代收授权。缺少签字、照片或授权的签收，一律标记为「未取证签收」，不得直接关闭异常。"),
+            ("5. 交接与升级", "异常处理人需在 30 分钟内首次响应，2 小时内给出处置结论。超时未响应自动升级至客服主管。涉及赔付、危险品、人员受伤、对外承诺的，不得由智能体处理，必须转人工接管。"),
+        ],
+    },
+    {
+        "id": "doc_002",
+        "title": "运输异常处置与签收协作规则（华北试点版）",
+        "lane": "试点干线-华北",
+        "version": "0.1",
+        "effective_from": "2026-11-05",
+        "published_by": "u_sup1",
+        "chunks": [
+            ("1. 适用范围", "本规则适用于试点干线-华北（北京、天津、河北）的整车运单；零担业务暂不纳入，仍按原流程执行。"),
+            ("2. 异常分类", "华北片区把「卸货排队」归入延误：排队超过 6 小时才计为异常，需记录进场与离场时间；客户临时改地址必须同步客户合同编号，否则按「单证缺失」处理。"),
+            ("3. 到货与回执口径", "华北的到货准时率按承诺到达日计算，不精确到时刻；回执需在签收后 12 小时内回传，超时即计为回执不及时。"),
+            ("4. 签收与证据要求", "华北要求签收照片至少 3 张，须包含车牌、货物全景与签收单据；缺少任意一张即标记「未取证签收」。"),
+        ],
+    },
 ]
 
 DEMO_SESSIONS = [
@@ -395,27 +418,34 @@ def _seed_users(conn: sqlite3.Connection, created: str) -> None:
 
 
 def _seed_rule_doc(conn: sqlite3.Connection, created: str) -> None:
-    doc_id, title, lane, version, effective_from = DEMO_DOC
-    conn.execute(
-        "INSERT OR IGNORE INTO kb_documents"
-        " (id, title, lane_scope, status, current_version, active_version, effective_from,"
-        "  is_demo, created_at, updated_at)"
-        " VALUES (?,?,?,?,?,?,?,1,?,?)",
-        (doc_id, title, lane, "active", version, version, effective_from, created, created),
-    )
-    conn.execute(
-        "INSERT OR IGNORE INTO kb_document_versions"
-        " (id, doc_id, version, content_hash, change_note, published_at, published_by, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?)",
-        ("kbv_001", doc_id, version, "seed-v01", "试点首版", created, "u_sup2", created),
-    )
-    for idx, (section, text) in enumerate(DEMO_CHUNKS, start=1):
+    for order, doc in enumerate(DEMO_DOCS, start=1):
+        doc_id = doc["id"]
+        version = doc["version"]
         conn.execute(
-            "INSERT OR IGNORE INTO kb_chunks"
-            " (id, doc_id, version, chunk_no, section, text, token_count, is_active, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?)",
-            (f"chk_{idx:03d}", doc_id, version, idx, section, text, len(text), 1, created),
+            "INSERT OR IGNORE INTO kb_documents"
+            " (id, title, lane_scope, status, current_version, active_version, effective_from,"
+            "  is_demo, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?,?,1,?,?)",
+            (doc_id, doc["title"], doc["lane"], "active", version, version,
+             doc["effective_from"], created, created),
         )
+        conn.execute(
+            "INSERT OR IGNORE INTO kb_document_versions"
+            " (id, doc_id, version, content_hash, change_note, published_at, published_by, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            (f"kbv_{order:03d}", doc_id, version, f"seed-{doc_id}-v{version}",
+             "试点首版", created, doc.get("published_by", "u_sup2"), created),
+        )
+        # doc_001 用 chk_001..，doc_002 用 chk_101..，避免主键冲突且便于人眼区分
+        offset = (order - 1) * 100
+        for idx, (section, text) in enumerate(doc["chunks"], start=1):
+            conn.execute(
+                "INSERT OR IGNORE INTO kb_chunks"
+                " (id, doc_id, version, chunk_no, section, text, token_count, is_active, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?,?)",
+                (f"chk_{offset + idx:03d}", doc_id, version, idx, section, text,
+                 len(text), 1, created),
+            )
     # 按实际生效切片重算，删除/恢复演示文档后检索缓存会自动失效
     active = conn.execute("SELECT COUNT(*) FROM kb_chunks WHERE is_active=1").fetchone()[0]
     conn.execute(

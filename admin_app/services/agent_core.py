@@ -113,6 +113,31 @@ def get_retriever(conn) -> Optional[Any]:
         return retriever
 
 
+def search(conn, question: str, lane_scope: str = "", top_k: int = 0) -> Optional[list]:
+    """按线路检索。返回 None 表示知识库不可用，[] 表示本线路没有生效规则。
+
+    注意这里**故意不沿用原型的兜底**：原型在过滤后为空时会退回全量切片，
+    那会把别的片区的口径拿来回答（f50 的典型事故）。线路没有规则就返回空，
+    让上层老老实实回答「未覆盖」。
+    """
+    retriever = get_retriever(conn)
+    if retriever is None:
+        return None
+
+    lane = (lane_scope or "").strip()
+    if lane:
+        has_lane = any(
+            (chunk.lane_scope or "").strip() in {"all", lane} for chunk in retriever.chunks
+        )
+        if not has_lane:
+            return []
+
+    cfg = app_config()
+    return retriever.search(
+        question, top_k=top_k or cfg.top_k, lane_scope=lane or None
+    )
+
+
 def invalidate_retriever() -> None:
     """后台重建索引后主动清缓存（正常情况下索引键变化也会自动失效）。"""
     with _retriever_lock:
