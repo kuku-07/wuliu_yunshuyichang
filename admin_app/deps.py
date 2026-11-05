@@ -45,6 +45,8 @@ PERMS: dict[str, set[str]] = {
     },
     # 现场调度：只看异常与待办，可受理/转交/关闭，不能碰规则与审计
     "dispatcher": {"ops:read", "ops:act"},
+    # 一线客服：只有员工端（聊天），没有任何后台权限
+    "staff": {"agent:use"},
     # 承运商与客户：只读门户，只看授权给他们的运单
     "carrier": {"portal:read"},
     "customer": {"portal:read"},
@@ -56,6 +58,7 @@ ROLE_NAMES = {
     "auditor": "合规审计",
     "sys_admin": "系统管理员",
     "dispatcher": "现场调度",
+    "staff": "一线客服",
     "carrier": "承运商经理",
     "customer": "客户",
 }

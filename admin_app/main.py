@@ -132,10 +132,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.get("/")
 def root():
-    return RedirectResponse("/admin/kb", status_code=307)
+    return RedirectResponse("/login", status_code=307)
 
 
 app.include_router(auth.router)
+app.include_router(auth.public_router)
 app.include_router(chat.router)
 app.include_router(agent.router)
 app.include_router(grants.router)

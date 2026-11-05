@@ -493,7 +493,7 @@ def main() -> int:
     agent = TestClient(app)
     token = csrf(agent)
     login_response = agent.post(
-        "/admin/login",
+        "/login",
         data={"employee_no": "supervisor", "password": PASSWORD, "csrf_token": token},
         follow_redirects=False,
     )
@@ -531,6 +531,51 @@ def main() -> int:
     if status != 200 or "done" not in [name for name, _d, _t in events]:
         fail("门户内问答可用", str(status))
     ok("员工门户 /agent：独立入口、无后台导航、问答与线路切换可用")
+
+    # ---- 15. 员工端独立登录（与后台分离） ----
+    from admin_app.db import connect as _connect
+    from admin_app.services import users as _users
+
+    conn = _connect()
+    try:
+        actor = dict(conn.execute(
+            "SELECT * FROM admin_users WHERE employee_no='sys_admin'"
+        ).fetchone())
+        created_ok, created_err = _users.create(
+            conn, actor, "kefu_test", "客服测试", "staff",
+            ["试点干线-华东"], "KefuTest@1234",
+        )
+        if not created_ok and "已存在" not in created_err:
+            fail("创建员工端账号", created_err)
+    finally:
+        conn.close()
+
+    staff = TestClient(app)
+    token = csrf(staff)
+    staff_login = staff.post(
+        "/login",
+        data={"employee_no": "kefu_test", "password": "KefuTest@1234",
+              "csrf_token": token},
+        follow_redirects=False,
+    )
+    if not staff_login.headers.get("location", "").startswith("/agent"):
+        fail("员工端登录跳转", staff_login.headers.get("location", ""))
+    if "账号管理" in staff.get("/agent").text:
+        fail("员工端不显示后台导航", "出现后台菜单")
+    if staff.get("/admin/kb", follow_redirects=False).status_code != 403:
+        fail("员工端账号不能进后台", "未拦截")
+
+    denied = TestClient(app)
+    token = csrf(denied)
+    denied_login = denied.post(
+        "/admin/login",
+        data={"employee_no": "kefu_test", "password": "KefuTest@1234",
+              "csrf_token": token},
+        follow_redirects=False,
+    )
+    if "err=" not in denied_login.headers.get("location", ""):
+        fail("员工账号走后台登录应被拒绝", denied_login.headers.get("location", ""))
+    ok("员工端独立登录：/login 进 /agent，后台登录被拒，后台页面 403")
 
     print()
     print(f"全部通过：{len(STEPS)} 项")

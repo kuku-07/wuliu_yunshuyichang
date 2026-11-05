@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>员工登录 · 运输异常协作</title>
+  <link rel="stylesheet" href="/admin/static/admin.css?v={{ asset_version }}">
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-brand">
+      <span class="brand-mark brand-mark-lg">运</span>
+      <h1>异常协作 · 一线问答</h1>
+      <p class="muted">员工端 · 只提供问答与查单草稿</p>
+    </div>
+
+    <form class="card login-card" method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <h2>员工登录</h2>
+      {% if err %}<div class="alert alert-err">{{ err }}</div>{% endif %}
+      {% if ok %}<div class="alert alert-ok">{{ ok }}</div>{% endif %}
+
+      <label class="field">
+        <span>账号</span>
+        <input type="text" name="employee_no" autocomplete="username" required autofocus>
+      </label>
+      <label class="field">
+        <span>密码</span>
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">进入问答</button>
+      <p class="login-hint">连续 5 次失败将锁定 15 分钟。管理员请从
+        <a href="/admin/login">管理端登录</a>。</p>
+    </form>
+  </div>
+</body>
+</html>

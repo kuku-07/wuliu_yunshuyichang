@@ -19,6 +19,7 @@ ROLES = {
     "auditor": "合规审计",
     "sys_admin": "系统管理员",
     "dispatcher": "现场调度",
+    "staff": "一线客服",
     "carrier": "承运商经理",
     "customer": "客户",
 }
