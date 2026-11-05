@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends layout %}
 {% block title %}一线问答{% endblock %}
 {% block body_class %}chat-page{% endblock %}
 {% block page_title %}一线问答{% endblock %}
@@ -12,7 +12,7 @@
   <aside class="chat-sider">
     <div class="sider-head">
       <span class="sider-title">会话</span>
-      <form method="post" action="/admin/chat/session">
+      <form method="post" action="{{ chat_base }}/session">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="sider-new" type="submit">＋ 新建</button>
       </form>
@@ -20,11 +20,11 @@
     <div class="sider-list">
       {% for s in sessions %}
       <div class="sider-item {% if s.id == session.id %}active{% endif %}">
-        <a class="sider-link" href="/admin/chat?session={{ s.id }}">
+        <a class="sider-link" href="{{ chat_base }}?session={{ s.id }}">
           <span class="sider-text">{{ s.title }}</span>
           <span class="sider-meta">{{ s.msg_count }} 条 · {{ s.lane_scope }}</span>
         </a>
-        <form method="post" action="/admin/chat/{{ s.id }}/delete" class="sider-del"
+        <form method="post" action="{{ chat_base }}/{{ s.id }}/delete" class="sider-del"
               onsubmit="return confirm('删除会话「{{ s.title }}」及其全部消息？');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button type="submit" title="删除会话">×</button>
@@ -35,7 +35,7 @@
       {% endfor %}
     </div>
     <div class="sider-foot">
-      <form method="post" action="/admin/chat/lane" class="lane-form">
+      <form method="post" action="{{ chat_base }}/lane" class="lane-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="session_id" value="{{ session.id }}">
         <label class="lane-label">

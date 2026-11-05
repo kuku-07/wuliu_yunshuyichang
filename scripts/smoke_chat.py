@@ -489,6 +489,49 @@ def main() -> int:
         fail("范围外的线路应被拒绝", out_of_scope.headers.get("location", ""))
     ok("切到范围外的干线 → 被拒绝")
 
+    # ---- 14. 员工门户（C 端）独立入口 ----
+    agent = TestClient(app)
+    token = csrf(agent)
+    login_response = agent.post(
+        "/admin/login",
+        data={"employee_no": "supervisor", "password": PASSWORD, "csrf_token": token},
+        follow_redirects=False,
+    )
+    location = login_response.headers.get("location", "")
+    if not location.startswith("/agent"):
+        fail("员工登录跳转门户", location)
+
+    agent_page = agent.get("/agent")
+    if agent_page.status_code != 200:
+        fail("员工门户可访问", str(agent_page.status_code))
+    if "账号管理" in agent_page.text or "对话审计" in agent_page.text:
+        fail("员工门户不应出现后台导航", "出现后台菜单")
+    if "管理后台" not in agent_page.text:
+        fail("员工门户保留后台入口", "缺失")
+
+    agent_session = re.search(
+        r'data-session="([^"]+)"', agent_page.text
+    ).group(1)
+    created = agent.post(
+        "/agent/session", data={"csrf_token": csrf(agent)}, follow_redirects=False
+    )
+    if created.status_code != 303:
+        fail("门户新建会话", str(created.status_code))
+
+    switched = agent.post(
+        "/agent/lane",
+        data={"csrf_token": csrf(agent), "session_id": agent_session,
+              "lane_scope": "试点干线-华东"},
+        follow_redirects=False,
+    )
+    if switched.status_code != 303:
+        fail("门户切换线路", str(switched.status_code))
+
+    status, events, _ = ask(agent, agent_session, "签收单缺少收货人签字怎么办？")
+    if status != 200 or "done" not in [name for name, _d, _t in events]:
+        fail("门户内问答可用", str(status))
+    ok("员工门户 /agent：独立入口、无后台导航、问答与线路切换可用")
+
     print()
     print(f"全部通过：{len(STEPS)} 项")
     return 0

@@ -91,7 +91,12 @@ def login_submit(
         lanes = []
     scopes = sorted(PERMS.get(row["role"], set()))
     token = create_access_token(row["id"], row["role"], lanes, scopes=scopes)
-    target = "/portal" if row["role"] in {"customer", "carrier"} else "/admin/kb"
+    if row["role"] in {"customer", "carrier"}:
+        target = "/portal"
+    elif row["role"] == "dispatcher":
+        target = "/admin/todos"
+    else:
+        target = "/agent"
     response = redirect(target, ok="登录成功")
     response.set_cookie(
         config.COOKIE_NAME, token, httponly=True, samesite="strict",

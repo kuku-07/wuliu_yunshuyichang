@@ -23,16 +23,16 @@ class Forbidden(Exception):
 PERMS: dict[str, set[str]] = {
     "rule_admin": {
         "kb:read", "kb:edit", "kb:submit", "prompt:read", "prompt:edit",
-        "audit:read", "ops:read",
+        "audit:read", "ops:read", "agent:use",
     },
     "supervisor": {
         "kb:read", "kb:approve", "kb:publish", "kb:offline",
         "prompt:read", "prompt:edit", "prompt:publish",
-        "audit:read", "audit:mark", "audit:export", "ops:read", "ops:act",
+        "audit:read", "audit:mark", "audit:export", "ops:read", "ops:act", "agent:use",
     },
     "auditor": {
         "kb:read", "prompt:read", "audit:read", "audit:mark", "audit:export",
-        "ops:read",
+        "ops:read", "agent:use",
     },
     # 系统管理员 = 运维全权：规则库、提示词、审计、索引、账号与数据都要能管。
     # 注意这会绕过「提交→批准→发布」的三方分离；若要严格分离，把 kb:approve /
@@ -41,7 +41,7 @@ PERMS: dict[str, set[str]] = {
         "kb:read", "kb:edit", "kb:submit", "kb:approve", "kb:publish", "kb:offline",
         "prompt:read", "prompt:edit", "prompt:publish",
         "audit:read", "audit:mark", "audit:export",
-        "index:rebuild", "users:manage", "ops:read", "ops:act",
+        "index:rebuild", "users:manage", "ops:read", "ops:act", "agent:use",
     },
     # 现场调度：只看异常与待办，可受理/转交/关闭，不能碰规则与审计
     "dispatcher": {"ops:read", "ops:act"},

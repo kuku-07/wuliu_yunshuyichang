@@ -51,35 +51,10 @@ def chat_page(
     user=Depends(require_page()),
     db=Depends(get_db),
 ):
-    current = None
-    if session:
-        candidate = chat_service.get_session(db, session)
-        # 只能看自己的会话；别人的 id 一律忽略，回到自己的最近会话
-        if candidate and candidate["user_id"] == user["id"]:
-            current = candidate
-    if current is None:
-        current = chat_service.get_or_create_session(db, user)
-
-    messages = chat_service.load_messages(db, current["id"])
-    lane_options = lane_service.options(
-        db, user.get("lanes") or [], unrestricted=user.get("role") == "sys_admin"
-    )
-    # 会话正在用的线路如果被停用了，仍要出现在下拉里，否则界面显示与实际不一致
-    if current["lane_scope"] and all(
-        option["name"] != current["lane_scope"] for option in lane_options
-    ):
-        lane_options.append(
-            {"name": current["lane_scope"], "region": "", "status": "disabled"}
-        )
-
+    context = chat_service.page_context(db, user, session)
     return render(
-        request, user, "chat.html",
-        session=current,
-        sessions=chat_service.list_sessions(db, user["id"]),
-        messages=messages,
-        lanes=lane_options,
-        suggestions=chat_service.SUGGESTIONS,
-        question_max=chat_service.QUESTION_MAX,
+        request, user, "chat.html", layout="base.html", chat_base="/admin/chat",
+        **context,
     )
 
 

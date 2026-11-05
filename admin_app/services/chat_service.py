@@ -77,6 +77,37 @@ def default_lane(user: dict) -> str:
     return lanes[0] if lanes else "试点干线-华东"
 
 
+def page_context(conn: sqlite3.Connection, user: dict, session_id: str = "") -> dict:
+    """问答页上下文：两个入口（/agent 与 /admin/chat）共用。"""
+    from .lanes import options
+
+    current = None
+    if session_id:
+        candidate = get_session(conn, session_id)
+        if candidate and candidate["user_id"] == user["id"]:
+            current = candidate
+    if current is None:
+        current = get_or_create_session(conn, user)
+
+    lane_options = options(
+        conn, user.get("lanes") or [], unrestricted=user.get("role") == "sys_admin"
+    )
+    if current["lane_scope"] and all(
+        option["name"] != current["lane_scope"] for option in lane_options
+    ):
+        lane_options.append(
+            {"name": current["lane_scope"], "region": "", "status": "disabled"}
+        )
+    return {
+        "session": current,
+        "sessions": list_sessions(conn, user["id"]),
+        "messages": load_messages(conn, current["id"]),
+        "lanes": lane_options,
+        "suggestions": SUGGESTIONS,
+        "question_max": QUESTION_MAX,
+    }
+
+
 def available_lanes(conn: sqlite3.Connection, user: dict) -> list[str]:
     """可选线路名：按账号线路范围过滤（系统管理员不受限）。"""
     from .lanes import options
