@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from admin_app.main import app  # noqa: E402
 from admin_app import db as db_module  # noqa: E402
+from admin_app.db import connect  # noqa: E402
 from admin_app.services import chat_service  # noqa: E402
 
 # 不用 with TestClient(...) 时不会触发 lifespan，这里显式建表并写种子
@@ -68,14 +69,15 @@ def login(client: TestClient, employee_no: str) -> None:
     assert "admin_token" in client.cookies, f"{employee_no} 登录未下发 token"
 
 
-def ask(client: TestClient, session_id: str, question: str, token: str | None = None):
+def ask(client: TestClient, session_id: str, question: str, token: str | None = None,
+        shipment_no: str = ""):
     """跑一次 SSE，返回 (events, 首个事件耗时秒)。"""
     started = time.monotonic()
     events: list[tuple[str, dict, float]] = []
     with client.stream(
         "POST", "/admin/api/chat/stream",
         data={"question": question, "session_id": session_id,
-              "csrf_token": token or csrf(client)},
+              "csrf_token": token or csrf(client), "shipment_no": shipment_no},
     ) as response:
         if response.status_code != 200:
             response.read()
@@ -205,8 +207,87 @@ def main() -> int:
         chat_service._recent_hits.pop(uid, None)
     ok("超过 10 次/分钟 → 429 RATE_LIMITED")
 
-    # ---- 7. 落库：消息、引用、审计 ----
-    from admin_app.db import connect
+    # ---- 8. 运单级授权（ABAC 预检）----
+    # 8.1 无授权 / 过期 / 撤销 三种拒绝都要在流开始前返回 403
+    status, payload, _ = ask(client, session_id, "封路导致延误怎么记录？",
+                             shipment_no="YD20261030002")
+    if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
+        fail("无授权运单返回 403", f"{status} {payload}")
+    status, payload, _ = ask(client, session_id, "封路导致延误怎么记录？",
+                             shipment_no="YD20261030009")
+    if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
+        fail("已过期授权返回 403", f"{status} {payload}")
+    ok("无授权 / 已过期运单 → 403 SHIPMENT_FORBIDDEN（流前拦截）")
+
+    # 8.2 被拒请求不落消息、不检索、不调模型
+    conn = connect()
+    try:
+        leaked = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE content LIKE ?", ("%封路导致延误%",)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    if leaked:
+        fail("越权请求不得产生消息", f"{leaked} 条")
+    ok("越权请求不产生消息（不检索、不调用模型）")
+
+    # 8.3 已授权则正常问答
+    status, events, _ = ask(client, session_id, "封路导致延误怎么记录？",
+                            shipment_no="YD20261030001")
+    if status != 200 or "delta" not in names(events):
+        fail("已授权运单正常回答", str(status))
+    ok("已授权运单 → 正常问答")
+
+    # 8.4 撤销后立刻失效（走后台页面操作）
+    admin = TestClient(app)
+    login(admin, "sys_admin")
+    grants_page = admin.get("/admin/grants")
+    if grants_page.status_code != 200 or "运单级授权" not in grants_page.text:
+        fail("运单授权页可访问", str(grants_page.status_code))
+    ok("运单授权页可访问（仅系统管理员）")
+
+    auditor_client = TestClient(app)
+    login(auditor_client, "auditor")
+    if auditor_client.get("/admin/grants").status_code != 403:
+        fail("非管理员访问授权页应 403", "auditor 未被拒绝")
+    ok("非管理员访问运单授权页 → 403")
+
+    conn = connect()
+    try:
+        grant_row = conn.execute(
+            "SELECT id FROM authorization_grants WHERE user_id='u_rule' AND shipment_no='YD20261030001'"
+        ).fetchone()
+    finally:
+        conn.close()
+    if grant_row is None:
+        fail("演示授权存在", "u_rule / YD20261030001")
+    revoke = admin.post(
+        f"/admin/grants/{grant_row['id']}/revoke",
+        data={"csrf_token": csrf(admin), "reason": "冒烟测试撤销"},
+        follow_redirects=False,
+    )
+    if revoke.status_code != 303:
+        fail("撤销授权返回 303", str(revoke.status_code))
+    status, payload, _ = ask(client, session_id, "封路导致延误怎么记录？",
+                             shipment_no="YD20261030001")
+    if status != 403 or payload.get("code") != "SHIPMENT_FORBIDDEN":
+        fail("撤销后立即失效", f"{status} {payload}")
+    ok("撤销授权后对话立即被拒（403）")
+
+    conn = connect()
+    try:
+        actions = [r[0] for r in conn.execute(
+            "SELECT action FROM audit_logs"
+            " WHERE action LIKE 'chat.shipment%' OR action LIKE 'grant.%'"
+        ).fetchall()]
+    finally:
+        conn.close()
+    for action in ("chat.shipment_allowed", "chat.shipment_forbidden", "grant.revoke"):
+        if action not in actions:
+            fail(f"审计含 {action}", str(sorted(set(actions))))
+    ok("授权放行 / 拒绝 / 撤销均写入审计")
+
+    # ---- 9. 落库：消息、引用、审计 ----
 
     conn = connect()
     try:
@@ -236,7 +317,7 @@ def main() -> int:
         conn.close()
     ok(f"消息/引用/审计落库正确（{cite_count} 条引用）")
 
-    # ---- 8. 历史窗口 ≤6 组 ----
+    # ---- 10. 历史窗口 ≤6 组 ----
     conn = connect()
     try:
         history = chat_service.recent_history(conn, session_id)
@@ -246,7 +327,7 @@ def main() -> int:
         fail("历史窗口不超过 6 组", str(len(history)))
     ok(f"历史窗口受限（当前 {len(history)} 条消息 ≤ {chat_service.HISTORY_PAIRS*2}）")
 
-    # ---- 9. 审计页能看到真实会话 ----
+    # ---- 11. 审计页能看到真实会话 ----
     audit_page = client.get("/admin/audit")
     if audit_page.status_code != 200 or session_id not in audit_page.text:
         fail("对话审计页展示真实会话", str(audit_page.status_code))

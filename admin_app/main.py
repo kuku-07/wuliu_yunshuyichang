@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, db
 from .deps import Forbidden, LoginRequired
-from .routers import audit, auth, chat, kb, prompts
+from .routers import audit, auth, chat, grants, kb, prompts
 from .services import agent_core
 from .web import render
 
@@ -111,6 +111,7 @@ def root():
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(grants.router)
 app.include_router(kb.router)
 app.include_router(prompts.router)
 app.include_router(audit.router)

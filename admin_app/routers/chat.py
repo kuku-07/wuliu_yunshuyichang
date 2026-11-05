@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from ..db import connect
 from ..deps import get_db, require_api, require_page
 from ..services import chat_service
+from ..services import grants as grant_service
 from ..web import check_csrf, redirect, render
 
 router = APIRouter(prefix="/admin", tags=["chat"])
@@ -77,6 +78,7 @@ def chat_stream(
     request: Request,
     question: str = Form(""),
     session_id: str = Form(""),
+    shipment_no: str = Form(""),
     csrf_token: str = Form(""),
     user=Depends(require_api()),
 ):
@@ -104,6 +106,23 @@ def chat_stream(
         return _error("SESSION_NOT_FOUND", "会话不存在或已关闭", 404, request_id)
     if session["user_id"] != user["id"]:
         return _error("SESSION_FORBIDDEN", "无权访问该会话", 403, request_id)
+
+    # ---- 运单级授权预检：必须在流开始前，未授权不检索、不调模型 ----
+    shipment = grant_service.normalize(shipment_no)
+    if shipment:
+        if len(shipment) > 40:
+            return _error("INVALID_REQUEST", "运单号过长（上限 40 字符）", 400, request_id)
+        conn = connect()
+        try:
+            allowed, reason = grant_service.check(conn, user["id"], shipment)
+            grant_service.record_check(conn, user, shipment, allowed, reason, request_id)
+        finally:
+            conn.close()
+        if not allowed:
+            return _error(
+                "SHIPMENT_FORBIDDEN", grant_service.FORBIDDEN_MESSAGE, 403, request_id
+            )
+
     if chat_service.rate_limited(user["id"]):
         return _error("RATE_LIMITED", "提问过于频繁，请稍后再试", 429, request_id)
     if not chat_service.acquire_session(session_id):
@@ -112,7 +131,7 @@ def chat_stream(
     def event_stream():
         try:
             for event, data in chat_service.stream_turn(
-                connect, user, session, text, request_id
+                connect, user, session, text, request_id, shipment_no=shipment
             ):
                 yield _sse(event, data)
         finally:

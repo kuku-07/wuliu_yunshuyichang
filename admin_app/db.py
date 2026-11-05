@@ -162,8 +162,24 @@ CREATE TABLE IF NOT EXISTS conversation_flags (
     revoke_reason TEXT
 );
 
+CREATE TABLE IF NOT EXISTS authorization_grants (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL,
+    shipment_no  TEXT NOT NULL,
+    lane_scope   TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'active',
+    granted_by   TEXT,
+    granted_at   TEXT NOT NULL,
+    expires_at   TEXT,
+    revoked_at   TEXT,
+    revoked_by   TEXT,
+    reason       TEXT NOT NULL DEFAULT '',
+    UNIQUE(user_id, shipment_no)
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_citations_message ON citations(message_id);
+CREATE INDEX IF NOT EXISTS idx_grants_lookup ON authorization_grants(user_id, shipment_no, status);
 CREATE INDEX IF NOT EXISTS idx_docs_status ON kb_documents(status, lane_scope);
 CREATE INDEX IF NOT EXISTS idx_chunks_doc ON kb_chunks(doc_id, version, is_active);
 CREATE INDEX IF NOT EXISTS idx_flags_message ON conversation_flags(message_id);
@@ -211,6 +227,10 @@ def init_db() -> None:
         )
         if conn.execute("SELECT COUNT(*) FROM admin_users").fetchone()[0] == 0:
             _seed(conn)
+        elif conn.execute("SELECT COUNT(*) FROM authorization_grants").fetchone()[0] == 0:
+            # 老库升级：补齐演示授权。不补的话对话入口带运单一律被拒，
+            # 看起来像功能坏了，其实是没有任何授权记录。
+            _seed_grants(conn, now_iso())
         conn.commit()
     finally:
         conn.close()
@@ -343,3 +363,37 @@ def _seed(conn: sqlite3.Connection) -> None:
         ("f_001", "m_301", "UNAUTHORIZED_QUERY", "演示标记：运单查询未做授权校验，疑似越权。",
          "u_audit", "2026-10-29T15:00:00"),
     )
+
+    # ---- 运单级授权（ABAC 预检用）----
+    _seed_grants(conn, created)
+
+# ---------------------------------------------------------------------------
+# 运单级授权演示数据
+# ---------------------------------------------------------------------------
+# 故意留出四种状态，方便演示「生效 / 过期 / 已撤销 / 无授权」：
+#   u_rule  YD20261030001 生效
+#   u_rule  YD20261030009 已过期（2026-10-01 到期）
+#   u_sup1  YD20261030002 生效
+#   u_sup2  YD20261030001 已撤销
+DEMO_GRANTS = [
+    ("g_001", "u_rule", "YD20261030001", "active", "u_sys", None, None,
+     "规则管理员查试点首单"),
+    ("g_002", "u_rule", "YD20261030009", "active", "u_sys", "2026-10-01T00:00:00", None,
+     "临时授权已过期"),
+    ("g_003", "u_sup1", "YD20261030002", "active", "u_sys", None, None,
+     "客服主管跟进异常"),
+    ("g_004", "u_sup2", "YD20261030001", "revoked", "u_sys", None, "2026-10-29T16:00:00",
+     "已撤销：移交他人跟进"),
+]
+
+
+def _seed_grants(conn: sqlite3.Connection, created: str) -> None:
+    for gid, uid, shipment, status, granted_by, expires_at, revoked_at, reason in DEMO_GRANTS:
+        conn.execute(
+            "INSERT OR IGNORE INTO authorization_grants"
+            " (id, user_id, shipment_no, lane_scope, status, granted_by, granted_at,"
+            "  expires_at, revoked_at, reason)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (gid, uid, shipment, "试点干线-华东", status, granted_by, created, expires_at,
+             revoked_at, reason),
+        )

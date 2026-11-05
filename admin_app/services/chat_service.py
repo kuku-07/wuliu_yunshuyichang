@@ -273,7 +273,7 @@ def stream_turn(
     session: dict,
     question: str,
     request_id: str,
-    connect_hint: str = "",
+    shipment_no: str = "",
 ) -> Iterator[tuple[str, dict]]:
     """生成 SSE 事件序列。产出 (event, data) 二元组。
 
@@ -294,9 +294,14 @@ def stream_turn(
             conn, session_id, "user", masked_question, status="complete"
         )
         _touch_session(conn, session_id)
+        if shipment_no:
+            conn.execute(
+                "UPDATE sessions SET shipment_no=? WHERE id=?", (shipment_no, session_id)
+            )
         audit(
             conn, user, "chat.question", "message", user_msg_id,
-            f"session={session_id} 脱敏={pii_hits} 长度={len(question)}", request_id,
+            f"session={session_id} 运单={shipment_no or '-'} 脱敏={pii_hits}"
+            f" 长度={len(question)}", request_id,
         )
         conn.commit()
 

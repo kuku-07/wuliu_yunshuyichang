@@ -26,6 +26,10 @@
       <div class="nav-label">监督与追溯</div>
       <a class="nav-item {% if request.url.path.startswith('/admin/audit') %}active{% endif %}" href="/admin/audit">对话审计</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/releases') %}active{% endif %}" href="/admin/releases">发布记录</a>
+      {% if can('users:manage') %}
+      <div class="nav-label">权限</div>
+      <a class="nav-item {% if request.url.path.startswith('/admin/grants') %}active{% endif %}" href="/admin/grants">运单授权</a>
+      {% endif %}
     </nav>
 
     <div class="sidebar-user">

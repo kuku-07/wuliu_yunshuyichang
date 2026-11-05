@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}运单授权{% endblock %}
+{% block page_title %}运单授权{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>运单级授权</h2>
+      <p class="role-note">
+        对话入口带运单号提问时，会先查这里的授权记录；未授权直接拒绝，不检索、不调用模型。
+      </p>
+    </div>
+  </div>
+
+  <form class="filters" method="get" action="/admin/grants">
+    <label>状态
+      <select name="status">
+        <option value="">全部</option>
+        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>生效中</option>
+        <option value="revoked" {% if status_filter == 'revoked' %}selected{% endif %}>已撤销</option>
+        <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>已过期</option>
+      </select>
+    </label>
+    <label>关键词
+      <input type="text" name="keyword" value="{{ keyword }}" placeholder="运单号 / 姓名 / 工号">
+    </label>
+    <button class="btn btn-ghost" type="submit">筛选</button>
+  </form>
+
+  <div class="table-wrap" style="margin-top:16px;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>运单号</th><th>被授权人</th><th>状态</th><th>授权人</th>
+          <th>授权时间</th><th>到期时间</th><th>原因</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for g in grants %}
+        <tr>
+          <td class="mono">{{ g.shipment_no }}</td>
+          <td>{{ g.user_name or g.user_id }} <span class="muted small">{{ g.employee_no or '' }}</span></td>
+          <td>
+            {% if g.state == 'active' %}<span class="badge badge-active">生效中</span>
+            {% elif g.state == 'revoked' %}<span class="badge badge-offline">已撤销</span>
+            {% else %}<span class="badge badge-pending">已过期</span>{% endif %}
+          </td>
+          <td class="muted">{{ g.granted_by_name or g.granted_by or '-' }}</td>
+          <td class="muted">{{ g.granted_at|fmt_dt }}</td>
+          <td class="muted">{{ (g.expires_at|fmt_dt) if g.expires_at else '长期' }}</td>
+          <td class="muted small">{{ g.reason or '-' }}</td>
+          <td>
+            {% if g.state == 'active' %}
+            <form method="post" action="/admin/grants/{{ g.id }}/revoke" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="reason" value="管理后台手动撤销">
+              <button class="btn btn-danger btn-sm" type="submit">撤销</button>
+            </form>
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="muted">暂无授权记录。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>新增授权</h2>
+  <form method="post" action="/admin/grants/create" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>被授权人
+      <select name="user_id" required>
+        <option value="">请选择</option>
+        {% for u in users %}
+        <option value="{{ u.id }}">{{ u.employee_no }} · {{ u.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>运单号
+      <input type="text" name="shipment_no" placeholder="例如 YD20261030001" required maxlength="40">
+    </label>
+    <label>到期时间（可空，空表示长期）
+      <input type="datetime-local" name="expires_at">
+    </label>
+    <label>授权原因
+      <input type="text" name="reason" placeholder="例如：客户指定跟进人" maxlength="200">
+    </label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">授权</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
