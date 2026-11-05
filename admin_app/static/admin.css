@@ -58,7 +58,20 @@ a:hover { text-decoration: underline; }
 .brand-title { font-weight: 700; font-size: 15px; }
 .brand-sub { color: var(--muted); font-size: 12px; }
 
-.nav { display: flex; flex-direction: column; gap: 4px; }
+.nav {
+  display: flex; flex-direction: column; gap: 4px;
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding-right: 4px; margin-right: -4px;
+  scrollbar-width: thin; scrollbar-color: #d1d5db transparent;
+}
+.nav::-webkit-scrollbar { width: 6px; }
+.nav::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+.nav::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.nav::-webkit-scrollbar-track { background: transparent; }
+
+/* 顶部品牌与底部账号固定，只有中间的导航滚动 */
+.brand, .sidebar-user { flex: 0 0 auto; }
 .nav-label {
   margin: 12px 10px 4px; color: var(--muted);
   font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
