@@ -155,6 +155,7 @@
   var bodyEl = null;
   var current = null;
   var slowTimer = null;
+  var lastQuestion = "";
 
   function setState(text) { stateEl.textContent = text; }
   function scrollDown() { scroll.scrollTop = scroll.scrollHeight; }
@@ -307,6 +308,17 @@
     var box = el("div", "banner banner-error");
     box.textContent = (data.message || "本次未生成回答") +
       (data.request_id ? "（编号 " + data.request_id + "）" : "");
+    if (lastQuestion) {
+      var retry = el("button", "btn btn-ghost btn-sm", "重试");
+      retry.type = "button";
+      retry.style.marginLeft = "8px";
+      retry.addEventListener("click", function () {
+        input.value = lastQuestion;
+        input.dispatchEvent(new Event("input"));
+        submit();
+      });
+      box.appendChild(retry);
+    }
     keepBottom(box);
   }
 
@@ -375,6 +387,7 @@
     if (text.length > MAX) { alert("问题超过 " + MAX + " 字"); return; }
 
     busy = true;
+    lastQuestion = text;
     sendBtn.disabled = true;
     input.disabled = true;
     input.value = "";

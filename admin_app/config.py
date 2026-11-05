@@ -39,3 +39,6 @@ INGEST_TOKEN = os.getenv("INGEST_TOKEN", "dev-ingest-token")
 
 # SSE 心跳间隔（秒），测试可调小
 SSE_HEARTBEAT_SECONDS = float(os.getenv("SSE_HEARTBEAT_SECONDS", "15"))
+
+# 后台巡检间隔（秒）：扫描超时升级与预警
+OPS_TICK_SECONDS = int(os.getenv("OPS_TICK_SECONDS", "60"))

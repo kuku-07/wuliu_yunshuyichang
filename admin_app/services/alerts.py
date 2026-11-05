@@ -17,6 +17,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from ..db import now_iso
+from . import notify
 from .audit_log import log as audit
 
 DELIVERY_GRACE_MINUTES = 30
@@ -60,7 +61,14 @@ def _raise_alert(
             SEVERITY.get(alert_type, "medium"), reason, now_iso(),
         ),
     )
-    return cursor.rowcount > 0
+    created = cursor.rowcount > 0
+    if created:
+        notify.push_to_roles(
+            conn, ("supervisor", "sys_admin"), "ALERT",
+            f"{shipment_no} · {ALERT_TYPES.get(alert_type, alert_type)}",
+            reason, "/admin/exceptions",
+        )
+    return created
 
 
 def evaluate(conn: sqlite3.Connection, actor: dict | None = None) -> dict:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -13,9 +14,9 @@ from . import config, db
 from .deps import Forbidden, LoginRequired
 from .routers import (
     audit, auth, chat, data_admin, grants, ingest, kb, lanes, mainline, prompts,
-    shipments, users,
+    shipments, todos, users,
 )
-from .services import agent_core
+from .services import agent_core, ops
 from .web import render
 
 logger = logging.getLogger("admin")
@@ -48,6 +49,23 @@ async def lifespan(app: FastAPI):
     except Exception:  # 预热失败不影响启动，首个提问时还会再试
         logger.warning("检索预加载失败，首个提问可能稍慢", exc_info=True)
 
+    # 后台巡检：每分钟扫一次超时升级与预警，避免只在打开页面时才更新
+    stop_event = threading.Event()
+
+    def _patrol() -> None:
+        while not stop_event.wait(config.OPS_TICK_SECONDS):
+            try:
+                conn = db.connect()
+                try:
+                    ops.run_once(conn)
+                finally:
+                    conn.close()
+            except Exception:
+                logger.warning("后台巡检失败（不影响服务）", exc_info=True)
+
+    patrol_thread = threading.Thread(target=_patrol, daemon=True)
+    patrol_thread.start()
+
     # 90 天留存：启动时清理一次过期数据（docs/02 §7）
     try:
         conn = db.connect()
@@ -63,6 +81,8 @@ async def lifespan(app: FastAPI):
         logger.warning("留存清理失败（不影响启动）", exc_info=True)
 
     yield
+
+    stop_event.set()
 
 
 app = FastAPI(title="运输异常与签收协作 · 管理后台", lifespan=lifespan)
@@ -135,6 +155,7 @@ app.include_router(lanes.router)
 app.include_router(mainline.router)
 app.include_router(users.router)
 app.include_router(ingest.router)
+app.include_router(todos.router)
 app.include_router(data_admin.router)
 app.include_router(kb.router)
 app.include_router(prompts.router)

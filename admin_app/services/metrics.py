@@ -73,6 +73,7 @@ def overview(conn: sqlite3.Connection) -> dict:
     ]
     accepted = [r for r in rows if r.get("accepted_at")]
     first_ok = 0
+    first_15 = 0
     response_minutes = []
     for row in accepted:
         occurred = _parse(row.get("occurred_at"))
@@ -83,6 +84,8 @@ def overview(conn: sqlite3.Connection) -> dict:
         response_minutes.append(minutes)
         if minutes <= FIRST_RESPONSE_MINUTES:
             first_ok += 1
+        if minutes <= 15:
+            first_15 += 1
 
     closed = [r for r in rows if r.get("closed_at") and r.get("accepted_at")]
     resolve_ok = 0
@@ -133,6 +136,7 @@ def overview(conn: sqlite3.Connection) -> dict:
         "receipt_24h_rate": _rate(receipt_in_24h, len(delivered)),
         "accepted": len(accepted),
         "first_response_rate": _rate(first_ok, len(accepted)),
+        "first_response_15_rate": _rate(first_15, len(accepted)),
         "median_first_response": median,
         "closed": len(closed),
         "resolution_rate": _rate(resolve_ok, len(closed)),

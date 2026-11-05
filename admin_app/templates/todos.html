@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}我的待办{% endblock %}
+{% block page_title %}我的待办{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>通知（未读 {{ unread }}）</h2>
+      <p class="role-note">升级、预警、指派都会在这里出现；点「标记已读」即清掉红点。</p>
+    </div>
+    {% if unread %}
+    <form method="post" action="/admin/notifications/read" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-ghost btn-sm" type="submit">全部已读</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>类型</th><th>标题</th><th>说明</th><th>时间</th><th></th></tr></thead>
+      <tbody>
+        {% for n in notifications %}
+        <tr class="{{ '' if n.status == 'read' else 'row-unread' }}">
+          <td>
+            {% if n.type == 'ESCALATION' %}<span class="badge badge-takeover">升级</span>
+            {% elif n.type == 'ALERT' %}<span class="badge badge-pending">预警</span>
+            {% elif n.type == 'ASSIGN' %}<span class="badge badge-approved">指派</span>
+            {% else %}<span class="badge badge-draft">{{ n.type }}</span>{% endif %}
+          </td>
+          <td>{% if n.link %}<a href="{{ n.link }}">{{ n.title }}</a>{% else %}{{ n.title }}{% endif %}</td>
+          <td class="muted small">{{ n.body or '-' }}</td>
+          <td class="muted">{{ n.created_at|fmt_dt }}</td>
+          <td>
+            {% if n.status == 'unread' %}
+            <form method="post" action="/admin/notifications/read" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="notification_id" value="{{ n.id }}">
+              <button class="btn btn-ghost btn-sm" type="submit">标记已读</button>
+            </form>
+            {% else %}<span class="muted small">已读</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">没有通知。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>我的异常</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>运单</th><th>类型</th><th>发生时间</th><th>截止</th><th>状态</th></tr></thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td class="mono">{{ e.shipment_no }}</td>
+          <td>{{ e.event_type }}</td>
+          <td class="muted">{{ e.occurred_at|fmt_dt }}</td>
+          <td class="muted">{{ e.due_at|fmt_dt if e.due_at else '-' }}</td>
+          <td>
+            {% if e.escalated_at %}<span class="badge badge-takeover">已升级</span>
+            {% elif e.accepted_at %}<span class="badge badge-approved">处理中</span>
+            {% else %}<span class="badge badge-pending">待受理</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">没有指派给你的异常。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if drafts %}
+<div class="card">
+  <h2>待我审核的草稿（{{ drafts|length }}）</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>运单</th><th>内容摘录</th><th>生成时间</th><th></th></tr></thead>
+      <tbody>
+        {% for d in drafts %}
+        <tr>
+          <td class="mono">{{ d.shipment_no }}</td>
+          <td class="muted small">{{ d.content[:60] }}…</td>
+          <td class="muted">{{ d.created_at|fmt_dt }}</td>
+          <td><a class="btn btn-ghost btn-sm" href="/admin/workbench?shipment_no={{ d.shipment_no }}">去审核</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

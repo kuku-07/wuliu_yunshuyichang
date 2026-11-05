@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from admin_app import db as db_module  # noqa: E402
 from admin_app.db import connect  # noqa: E402
 from admin_app.main import app  # noqa: E402
+from admin_app.services import ops  # noqa: E402
 
 PASSWORD = "Admin@123456789"
 STEPS: list[str] = []
@@ -210,6 +211,81 @@ def main() -> int:
     if "不能降级" not in demote.text:
         fail("不能降级当前账号", "未拦截")
     ok("不能降级当前登录账号")
+
+    # ---- 8. 指派通知与我的待办 ----
+    conn = connect()
+    try:
+        event = conn.execute(
+            "SELECT id FROM exception_events WHERE closed_at IS NULL LIMIT 1"
+        ).fetchone()
+        handler = conn.execute(
+            "SELECT id FROM admin_users WHERE employee_no='u_north'"
+        ).fetchone()
+    finally:
+        conn.close()
+    post(admin, f"/admin/exceptions/{event['id']}/assign", {"handler": handler["id"]})
+    conn = connect()
+    try:
+        notes = conn.execute(
+            "SELECT COUNT(*) FROM notifications WHERE user_id=? AND type='ASSIGN'",
+            (handler["id"],),
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    if not notes:
+        fail("指派生成通知", "无通知")
+    north_todos = TestClient(app)
+    login(north_todos, "u_north", "NorthPass@456")
+    page = north_todos.get("/admin/todos")
+    if "你有一个新的异常" not in page.text:
+        fail("待办页展示指派通知", "缺失")
+    post(north_todos, "/admin/notifications/read", {})
+    conn = connect()
+    try:
+        left = conn.execute(
+            "SELECT COUNT(*) FROM notifications WHERE user_id=? AND status='unread'",
+            (handler["id"],),
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    if left:
+        fail("标记已读", str(left))
+    ok("指派生成站内通知，待办页可见并可标记已读")
+
+    # ---- 9. 巡检：升级并通知主管 ----
+    conn = connect()
+    try:
+        old = (datetime.now() - timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%S")
+        conn.execute(
+            "INSERT INTO exception_events"
+            " (id, shipment_no, event_type, reason_code, occurred_at, source,"
+            "  source_version, status, data_time, created_at)"
+            " VALUES ('ev_patrol', 'YD20261030001', '延误', 'PATROL', ?, 'TMS', 'v1',"
+            "  'normalized', ?, ?)",
+            (old, old, old),
+        )
+        conn.commit()
+        before = conn.execute(
+            "SELECT COUNT(*) FROM notifications WHERE type='ESCALATION'"
+        ).fetchone()[0]
+        ops.run_once(conn)
+        after = conn.execute(
+            "SELECT COUNT(*) FROM notifications WHERE type='ESCALATION'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    if after <= before:
+        fail("巡检生成升级通知", f"{before} → {after}")
+    ok("后台巡检：超时事件升级并通知主管")
+
+    # ---- 10. 重试按钮与 15 分钟口径 ----
+    chat_page = admin.get("/admin/chat")
+    if "重试" not in chat_page.text:
+        fail("聊天错误气泡带重试", "缺失")
+    metrics = admin.get("/admin/metrics")
+    if "≤15min" not in metrics.text:
+        fail("指标含 15 分钟占比", "缺失")
+    ok("聊天带重试按钮，指标同时给 15 分钟目标占比")
 
     print()
     print(f"全部通过：{len(STEPS)} 项")

@@ -560,3 +560,5 @@ body.chat-page .chat-shell {
   font-size: 12px; width: 96px; font-family: inherit; outline: none;
 }
 .event-actions select { width: 88px; }
+
+.row-unread { background: #fff7ed; }

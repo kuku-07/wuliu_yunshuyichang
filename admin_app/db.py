@@ -327,12 +327,24 @@ CREATE TABLE IF NOT EXISTS export_jobs (
     error        TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS notifications (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    body       TEXT NOT NULL DEFAULT '',
+    link       TEXT NOT NULL DEFAULT '',
+    status     TEXT NOT NULL DEFAULT 'unread',
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_citations_message ON citations(message_id);
 CREATE INDEX IF NOT EXISTS idx_grants_lookup ON authorization_grants(user_id, shipment_no, status);
 CREATE INDEX IF NOT EXISTS idx_docs_status ON kb_documents(status, lane_scope);
 CREATE INDEX IF NOT EXISTS idx_chunks_doc ON kb_chunks(doc_id, version, is_active);
 CREATE INDEX IF NOT EXISTS idx_flags_message ON conversation_flags(message_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action, created_at);
 """
 

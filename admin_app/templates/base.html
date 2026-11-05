@@ -24,6 +24,7 @@
       <a class="nav-item {% if request.url.path.startswith('/admin/kb') %}active{% endif %}" href="/admin/kb">规则知识库</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/prompts') %}active{% endif %}" href="/admin/prompts">提示词模板</a>
       <div class="nav-label">业务</div>
+      <a class="nav-item {% if request.url.path.startswith('/admin/todos') %}active{% endif %}" href="/admin/todos">我的待办</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/exceptions') %}active{% endif %}" href="/admin/exceptions">异常与修复</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/workbench') %}active{% endif %}" href="/admin/workbench">查单工作台</a>
       <a class="nav-item {% if request.url.path.startswith('/admin/metrics') %}active{% endif %}" href="/admin/metrics">指标</a>

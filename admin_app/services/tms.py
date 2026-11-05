@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 from ..db import now_iso
 from . import grants as grant_service
 from . import lanes as lane_service
+from . import notify
 from .audit_log import log as audit
 
 SAMPLE_DIR = Path(config.BASE_DIR).parent / "samples" / "tms"
@@ -433,6 +434,12 @@ def assign_event(
     audit(conn, actor, "event.assign", "exception_event", event_id,
           f"{row['shipment_no']} → {handler}")
     conn.commit()
+    notify.push(
+        conn, [handler], "ASSIGN",
+        f"你有一个新的异常待处理：{row['shipment_no']}",
+        f"{row['event_type']}（{row['reason_code'] or '无原因码'}）",
+        "/admin/todos",
+    )
     return True, f"已指派给 {handler}"
 
 
@@ -466,6 +473,17 @@ def escalate_overdue(conn: sqlite3.Connection) -> dict:
             )
     if first or resolve:
         conn.commit()
+        for row in rows:
+            note = conn.execute(
+                "SELECT escalation_note FROM exception_events WHERE id=?", (row["id"],)
+            ).fetchone()
+            if note and note["escalation_note"]:
+                notify.push_to_roles(
+                    conn, ("supervisor", "sys_admin"), "ESCALATION",
+                    f"{row['shipment_no']} · {row['event_type']} 已升级",
+                    note["escalation_note"],
+                    "/admin/exceptions",
+                )
     return {"first_response": first, "resolution": resolve}
 
 
