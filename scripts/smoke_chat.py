@@ -392,6 +392,37 @@ def main() -> int:
         fail("对话审计页展示真实会话", str(audit_page.status_code))
     ok("对话审计页已展示真实会话")
 
+    # ---- 12. 会话栏：列表 / 新建 / 切换 / 删除 ----
+    page = client.get("/admin/chat")
+    if "chat-sider" not in page.text:
+        fail("对话页有会话栏", "缺少 chat-sider")
+    if session_id not in page.text:
+        fail("当前会话在列表中", session_id)
+
+    client.post("/admin/chat/session", data={"csrf_token": csrf(client)},
+                follow_redirects=False)
+    page = client.get("/admin/chat")
+    new_id = re.search(r'data-session="([^"]+)"', page.text).group(1)
+    if new_id == session_id:
+        fail("新建会话生效", new_id)
+    ok("会话栏可用：新建会话后被切换过去")
+
+    switched = client.get(f"/admin/chat?session={session_id}")
+    if re.search(r'data-session="([^"]+)"', switched.text).group(1) != session_id:
+        fail("可以切换会话", session_id)
+    ok("点击列表可切换回历史会话")
+
+    foreign = client.get("/admin/chat?session=s_001")
+    if re.search(r'data-session="([^"]+)"', foreign.text).group(1) == "s_001":
+        fail("他人会话不可访问", "s_001")
+    ok("他人的会话 id 被忽略（回落到自己的会话）")
+
+    client.post(f"/admin/chat/{new_id}/delete", data={"csrf_token": csrf(client)},
+                follow_redirects=False)
+    if new_id in client.get("/admin/chat").text:
+        fail("删除会话后列表不再包含", new_id)
+    ok("删除会话后从列表消失")
+
     print()
     print(f"全部通过：{len(STEPS)} 项")
     return 0

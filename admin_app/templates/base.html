@@ -7,7 +7,7 @@
   <title>{% block title %}管理后台{% endblock %} · 运输异常协作</title>
   <link rel="stylesheet" href="/admin/static/admin.css?v={{ asset_version }}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 <div class="shell">
   <aside class="sidebar">
     <div class="brand">

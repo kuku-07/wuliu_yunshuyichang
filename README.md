@@ -64,6 +64,7 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
 - 「提示词模板」里当前生效的话术以**浅色占位文字**显示，输入正式话术后即被替换，
   不会把提示文字当成正文保存；无编辑权限的角色（如系统管理员）会看到明确的只读说明。
 - 对话首屏是引导态：标题 + 6 个可点的常见问题，点一下填入输入框，发送后自动收起。
+- 对话页左侧是会话栏：可新建、切换、删除会话（只能看到并操作自己的会话）。
 - 每次问答都落 `messages` / `citations` / `audit_logs`，「对话审计」页看到的是真实会话。
 - 没有 `LLM_API_KEY` 时走离线抽取（`OfflineExtractiveLLM`），只验证检索与引用完整性；
   配置 `LLM_PROVIDER=openai_compatible` + `LLM_API_KEY` 后才由真模型生成。

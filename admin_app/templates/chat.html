@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}一线问答{% endblock %}
+{% block body_class %}chat-page{% endblock %}
 {% block page_title %}一线问答{% endblock %}
 
 {% block content %}
@@ -8,82 +9,110 @@
      data-csrf="{{ csrf_token }}"
      data-max="{{ question_max }}">
 
-  <div class="chat-top">
-    <div class="chat-top-left">
-      <span class="chip chip-lane">线路 · {{ lanes[0] }}</span>
-      <span class="chip chip-ghost mono">{{ session.id }}</span>
-      <span class="ship-chip" id="ship-chip" hidden></span>
-    </div>
-    <div class="chat-top-right">
-      <span class="chat-state" id="chat-state">空闲</span>
+  <aside class="chat-sider">
+    <div class="sider-head">
+      <span class="sider-title">会话</span>
       <form method="post" action="/admin/chat/session">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="btn btn-ghost btn-sm" type="submit">新建会话</button>
+        <button class="sider-new" type="submit">＋ 新建</button>
       </form>
     </div>
-  </div>
+    <div class="sider-list">
+      {% for s in sessions %}
+      <div class="sider-item {% if s.id == session.id %}active{% endif %}">
+        <a class="sider-link" href="/admin/chat?session={{ s.id }}">
+          <span class="sider-text">{{ s.title }}</span>
+          <span class="sider-meta">{{ s.msg_count }} 条 · {{ s.last_active_at|fmt_dt }}</span>
+        </a>
+        <form method="post" action="/admin/chat/{{ s.id }}/delete" class="sider-del"
+              onsubmit="return confirm('删除会话「{{ s.title }}」及其全部消息？');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" title="删除会话">×</button>
+        </form>
+      </div>
+      {% else %}
+      <div class="sider-empty">还没有会话</div>
+      {% endfor %}
+    </div>
+    <div class="sider-foot">
+      <span class="chip chip-lane">线路 · {{ lanes[0] }}</span>
+    </div>
+  </aside>
 
-  <div class="chat-scroll" id="chat-scroll">
-    <div class="chat-hero" id="chat-hero" {% if messages %}hidden{% endif %}>
-      <h2 class="hero-title">有什么我能帮你的吗？</h2>
-      <p class="hero-sub">问规则与口径 · 涉及赔付、危险品、事故会自动转人工</p>
-      <div class="suggestions">
-        {% for item in suggestions %}
-        <button type="button" class="suggestion" data-q="{{ item }}">{{ item }}</button>
+  <div class="chat-body">
+    <div class="chat-top">
+      <div class="chat-top-left">
+        <span class="chip chip-ghost mono">{{ session.id }}</span>
+        <span class="muted small">{{ messages|length }} 条消息</span>
+        <span class="ship-chip" id="ship-chip" hidden></span>
+      </div>
+      <div class="chat-top-right">
+        <span class="chat-state" id="chat-state">空闲</span>
+      </div>
+    </div>
+
+    <div class="chat-scroll" id="chat-scroll">
+      <div class="chat-hero" id="chat-hero" {% if messages %}hidden{% endif %}>
+        <h2 class="hero-title">有什么我能帮你的吗？</h2>
+        <p class="hero-sub">问规则与口径 · 涉及赔付、危险品、事故会自动转人工</p>
+        <div class="suggestions">
+          {% for item in suggestions %}
+          <button type="button" class="suggestion" data-q="{{ item }}">{{ item }}</button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="chat-log" id="chat-log">
+        {% for m in messages %}
+          {% if m.role == 'user' %}
+          <div class="msg msg-user"><div class="bubble">{{ m.content }}</div></div>
+          {% else %}
+          <div class="msg msg-bot">
+            <div class="avatar-bot">运</div>
+            <div class="bubble">
+              {% if m.status == 'takeover' %}
+                <div class="banner banner-warn">已转人工接管，系统不提供自动建议</div>
+                <div class="answer-body">{{ m.content }}</div>
+                <div class="muted small">原因码 · {{ m.intent }}</div>
+              {% else %}
+                <div class="answer-body">{{ m.content }}</div>
+                {% if m.citations %}
+                <details class="cites">
+                  <summary>引用来源（{{ m.citations|length }}）</summary>
+                  {% for c in m.citations %}
+                  <div class="cite">
+                    <div class="cite-head">{{ c.doc_title }} · v{{ c.doc_version }} · {{ c.section }}</div>
+                    <div class="muted small">生效 {{ c.effective_from or '-' }} · 适用 {{ c.lane_scope }}</div>
+                    <div class="cite-quote">{{ c.quote }}</div>
+                  </div>
+                  {% endfor %}
+                </details>
+                {% else %}
+                <div class="muted small">未命中规则文档，需人工确认</div>
+                {% endif %}
+              {% endif %}
+              <div class="disclaimer">仅内部参考，不对外发送</div>
+            </div>
+          </div>
+          {% endif %}
         {% endfor %}
       </div>
     </div>
 
-    <div class="chat-log" id="chat-log">
-      {% for m in messages %}
-        {% if m.role == 'user' %}
-        <div class="msg msg-user"><div class="bubble">{{ m.content }}</div></div>
-        {% else %}
-        <div class="msg msg-bot">
-          <div class="avatar-bot">运</div>
-          <div class="bubble">
-            {% if m.status == 'takeover' %}
-              <div class="banner banner-warn">已转人工接管，系统不提供自动建议</div>
-              <div class="answer-body">{{ m.content }}</div>
-              <div class="muted small">原因码 · {{ m.intent }}</div>
-            {% else %}
-              <div class="answer-body">{{ m.content }}</div>
-              {% if m.citations %}
-              <details class="cites">
-                <summary>引用来源（{{ m.citations|length }}）</summary>
-                {% for c in m.citations %}
-                <div class="cite">
-                  <div class="cite-head">{{ c.doc_title }} · v{{ c.doc_version }} · {{ c.section }}</div>
-                  <div class="muted small">生效 {{ c.effective_from or '-' }} · 适用 {{ c.lane_scope }}</div>
-                  <div class="cite-quote">{{ c.quote }}</div>
-                </div>
-                {% endfor %}
-              </details>
-              {% else %}
-              <div class="muted small">未命中规则文档，需人工确认</div>
-              {% endif %}
-            {% endif %}
-            <div class="disclaimer">仅内部参考，不对外发送</div>
-          </div>
-        </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  </div>
-
-  <div class="composer">
-    <div class="composer-main">
-      <textarea id="q" rows="1" maxlength="{{ question_max }}" placeholder="发消息…"></textarea>
-      <button class="send-btn" id="send" type="button" title="发送（Ctrl + Enter）">↑</button>
-    </div>
-    <div class="composer-meta">
-      <label class="ship-inline">
-        <span>运单</span>
-        <input type="text" id="shipment" maxlength="40" autocomplete="off"
-               placeholder="可选，填了就校验授权">
-      </label>
-      <span class="counter" id="counter">0/{{ question_max }}</span>
-      <span class="note">回答仅供内部参考，不对外发送</span>
+    <div class="composer">
+      <div class="composer-main">
+        <textarea id="q" rows="1" maxlength="{{ question_max }}" placeholder="发消息…"></textarea>
+        <button class="send-btn" id="send" type="button" title="发送（Ctrl + Enter）">↑</button>
+      </div>
+      <div class="composer-meta">
+        <label class="ship-inline">
+          <span>运单</span>
+          <input type="text" id="shipment" maxlength="40" autocomplete="off"
+                 placeholder="可选，填了就校验授权">
+        </label>
+        <span class="counter" id="counter">0/{{ question_max }}</span>
+        <span class="note">回答仅供内部参考，不对外发送</span>
+      </div>
     </div>
   </div>
 </div>

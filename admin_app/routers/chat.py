@@ -41,16 +41,26 @@ def _sse(event: str, data: dict) -> str:
 @router.get("/chat")
 def chat_page(
     request: Request,
+    session: str = "",
     user=Depends(require_page()),
     db=Depends(get_db),
 ):
-    session = chat_service.get_or_create_session(db, user)
-    messages = chat_service.load_messages(db, session["id"])
+    current = None
+    if session:
+        candidate = chat_service.get_session(db, session)
+        # 只能看自己的会话；别人的 id 一律忽略，回到自己的最近会话
+        if candidate and candidate["user_id"] == user["id"]:
+            current = candidate
+    if current is None:
+        current = chat_service.get_or_create_session(db, user)
+
+    messages = chat_service.load_messages(db, current["id"])
     return render(
         request, user, "chat.html",
-        session=session,
+        session=current,
+        sessions=chat_service.list_sessions(db, user["id"]),
         messages=messages,
-        lanes=[session["lane_scope"]],
+        lanes=[current["lane_scope"]],
         suggestions=chat_service.SUGGESTIONS,
         question_max=chat_service.QUESTION_MAX,
     )
@@ -65,13 +75,24 @@ def new_session(
 ):
     if not check_csrf(request, csrf_token):
         return redirect("/admin/chat", err="页面已过期，请刷新后重试")
-    db.execute(
-        "UPDATE sessions SET status='closed' WHERE user_id=? AND status='active'",
-        (user["id"],),
-    )
-    db.commit()
     session = chat_service.create_session(db, user)
     return redirect("/admin/chat", ok=f"已新建会话 · {session['id']}")
+
+
+@router.post("/chat/{session_id}/delete")
+def delete_session(
+    request: Request,
+    session_id: str,
+    csrf_token: str = Form(""),
+    user=Depends(require_page()),
+    db=Depends(get_db),
+):
+    if not check_csrf(request, csrf_token):
+        return redirect("/admin/chat", err="页面已过期，请刷新后重试")
+    ok, error = chat_service.delete_session(db, user, session_id)
+    if not ok:
+        return redirect("/admin/chat", err=error)
+    return redirect("/admin/chat", ok="会话已删除")
 
 
 @router.post("/api/chat/stream")

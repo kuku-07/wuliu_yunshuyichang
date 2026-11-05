@@ -91,6 +91,53 @@ def get_session(conn: sqlite3.Connection, session_id: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def list_sessions(conn: sqlite3.Connection, user_id: str, limit: int = 50) -> list[dict]:
+    """左侧会话列表：标题取第一句提问，附带消息数与最近活跃时间。"""
+    rows = conn.execute(
+        "SELECT s.*,"
+        "  (SELECT m.content FROM messages m"
+        "    WHERE m.session_id=s.id AND m.role='user'"
+        "    ORDER BY m.created_at, m.rowid LIMIT 1) AS first_question,"
+        "  (SELECT COUNT(*) FROM messages m WHERE m.session_id=s.id) AS msg_count"
+        " FROM sessions s WHERE s.user_id=?"
+        " ORDER BY s.last_active_at DESC, s.created_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    sessions = []
+    for row in rows:
+        item = dict(row)
+        question = (item.pop("first_question", None) or "").strip()
+        title = re.sub(r"\s+", " ", question)[:24] or "新会话"
+        item["title"] = title
+        sessions.append(item)
+    return sessions
+
+
+def delete_session(conn: sqlite3.Connection, user: dict, session_id: str) -> tuple[bool, str]:
+    """删除自己的会话，连带消息、引用与标记。"""
+    row = conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+    if row is None:
+        return False, "会话不存在"
+    if row["user_id"] != user["id"]:
+        return False, "无权删除该会话"
+
+    message_ids = [
+        r["id"] for r in conn.execute(
+            "SELECT id FROM messages WHERE session_id=?", (session_id,)
+        )
+    ]
+    for message_id in message_ids:
+        conn.execute("DELETE FROM citations WHERE message_id=?", (message_id,))
+        conn.execute("DELETE FROM conversation_flags WHERE message_id=?", (message_id,))
+    conn.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
+    conn.execute("DELETE FROM sessions WHERE id=?", (session_id,))
+    conn.commit()
+    audit(conn, user, "chat.session.delete", "session", session_id,
+          f"连带消息 {len(message_ids)} 条")
+    conn.commit()
+    return True, ""
+
+
 def load_messages(conn: sqlite3.Connection, session_id: str, limit: int = 60) -> list[dict]:
     """页面回显用：只取已完成/已接管的问答，附带引用。"""
     rows = conn.execute(
