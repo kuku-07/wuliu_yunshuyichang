@@ -165,6 +165,28 @@ def main() -> int:
         fail("催单草稿场景", dict(draft) if draft else "无")
     ok("查单 / 催单两种场景分别生成草稿")
 
+    # ---- Agent 流水线：工具顺序与人工确认点 ----
+    from admin_app.services import draft as draft_service
+
+    conn = connect()
+    try:
+        actor = dict(conn.execute(
+            "SELECT * FROM admin_users WHERE employee_no='sys_admin'"
+        ).fetchone())
+        result, trace = draft_service.generate_with_trace(
+            conn, actor, "YD20261030002", "query"
+        )
+    finally:
+        conn.close()
+    tools = [step["tool"] for step in trace]
+    if tools[:3] != ["validate", "circuit", "evidence"]:
+        fail("Agent 流水线顺序", str(tools))
+    if not any(step.get("requires_human") for step in trace):
+        fail("Agent 流水线包含人工确认点", str(tools))
+    if not result[0]:
+        fail("Agent 流水线产出", result[1])
+    ok("Agent 流水线：7 步工具顺序正确，含人工确认点")
+
     # 停止自动建议（GPS 弱网）
     conn = connect()
     try:

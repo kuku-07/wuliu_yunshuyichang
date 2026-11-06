@@ -11,6 +11,7 @@
 | 文档 | 内容 | 状态 |
 | --- | --- | --- |
 | [docs/discovery-report.md](docs/discovery-report.md) | 原始业务发现报告说明（原报告未随仓库提供） | 说明 |
+| [docs/MVP-交付说明.md](docs/MVP-交付说明.md) | 工程架构、Agent 框架、知识库、5 处人工确认点与演示路径 | 交付 |
 | [docs/运输异常协作系统-需求分析方案.docx](docs/运输异常协作系统-需求分析方案.docx) | 痛点、AI 改造优先级、需求规格、边界、追溯矩阵、验收清单 | v1.0 |
 | [docs/运输异常典型事件资料.docx](docs/运输异常典型事件资料.docx) | 基于现场访谈的典型事件、问题清单与量化指标 | v1.0 |
 | [docs/运输异常管理行业分析报告.docx](docs/运输异常管理行业分析报告.docx) | 行业规模、异常管理、竞争格局、商业模式与项目启示 | v1.0 |
@@ -21,16 +22,29 @@
 | [docs/远川物流-一票货的最后一公里-四份可核对资料.html](docs/远川物流-一票货的最后一公里-四份可核对资料.html) | 案例包 logistics-01~04 | 原始 |
 | [docs/流程图-改造前.png](docs/流程图-改造前.png) / [改造后](docs/流程图-改造后.png) | 两张流程图原图 | 图片 |
 
-## 阶段 1 原型（可运行，零依赖）
+## MVP 交付（工程架构 + Agent 框架 + 知识库）
+
+| 要求 | 落点 |
+| --- | --- |
+| 工程架构 | `admin_app/`：入口 `/agent`、`/admin`、`/portal` → FastAPI 服务层 → 领域服务 → SQLite |
+| Agent 框架 | [admin_app/agent/framework.py](admin_app/agent/framework.py)：Tool / Registry / Context / Trace / Pipeline |
+| 知识库 | `kb_documents` / `kb_chunks` + 版本审批发布 + 线路隔离检索 + 引用 |
+| 人工确认点 | 5 处：规则发布、停止建议/红线接管、草稿审核、外发登记、留存审批 |
+
+Agent 流水线已接入查单草稿（`admin_app/services/draft.py::generate_with_trace`），可用
+`python scripts/agent_demo.py YD20261030001` 查看每一步工具、耗时与是否需要人工确认。
+详见 [docs/MVP-交付说明.md](docs/MVP-交付说明.md)。
+
+## 阶段 1 问答助手（已归档，仍可运行）
 
 | 文件 | 内容 |
 | --- | --- |
-| [prototype/phase1_cli.py](prototype/phase1_cli.py) | 单文件 CLI：切片 → 混合检索 → 红线闸门 → LLM → 护栏自检 |
-| [prototype/data/policy_sample.md](prototype/data/policy_sample.md) | 带版本与生效日期的规则样例文档 |
+| [archive/qa_assistant/phase1_cli.py](archive/qa_assistant/phase1_cli.py) | 单文件 CLI：切片 → 混合检索 → 红线闸门 → LLM → 护栏自检 |
+| [archive/qa_assistant/data/policy_sample.md](archive/qa_assistant/data/policy_sample.md) | 带版本与生效日期的规则样例文档 |
 
 ```powershell
-python prototype/phase1_cli.py --selftest     # 离线自检，不需要 API Key
-python prototype/phase1_cli.py                # 交互问答
+python archive/qa_assistant/phase1_cli.py --selftest     # 离线自检，不需要 API Key
+python archive/qa_assistant/phase1_cli.py                # 交互问答
 ```
 
 ## 阶段 2 一线问答（可运行，网页版）

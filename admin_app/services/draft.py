@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
+from ..agent import AgentContext, AgentPipeline, Tool, ToolRegistry
 from ..db import now_iso
 from . import agent_core, chat_service, circuit
 from . import ingest as ingest_service
@@ -201,25 +202,43 @@ def stop_advice(ev: dict) -> tuple[str, str] | None:
     return None
 
 
-def generate(
+def generate_with_trace(
     conn: sqlite3.Connection, user: dict, shipment_no: str, scenario: str = "query",
-) -> tuple[bool, str, dict | None]:
+) -> tuple[tuple[bool, str, dict | None], list[dict]]:
+    """用 Agent 流水线生成草稿，并返回每一步的 trace。
+
+    流水线：validate → circuit → evidence → stop_guard → redline → generate → persist
+    任一“人工确认点”触发即 block，不继续调用模型或落库。
+    """
     number = (shipment_no or "").strip().upper()
-    if scenario not in SCENARIOS:
-        return False, "不支持的处理场景", None
 
-    tripped, rate = circuit.status(conn)
-    if tripped:
-        return False, (
-            f"预警误报率 {rate}% 已连续超过 10%，自动建议暂停（熔断），请人工处理"
-        ), None
+    def t_validate(ctx: AgentContext) -> None:
+        if ctx.payload["scenario"] not in SCENARIOS:
+            ctx.block("INVALID_SCENARIO", (False, "不支持的处理场景", None))
 
-    ev = evidence(conn, number)
-    if ev is None:
-        return False, f"运单 {number} 不存在，请先在「运单登记」里登记", None
+    def t_circuit(ctx: AgentContext) -> None:
+        tripped, rate = circuit.status(conn)
+        if tripped:
+            ctx.block("CIRCUIT_OPEN", (
+                False,
+                f"预警误报率 {rate}% 已连续超过 10%，自动建议暂停（熔断），请人工处理",
+                None,
+            ))
 
-    stop = stop_advice(ev)
-    if stop:
+    def t_evidence(ctx: AgentContext) -> None:
+        ev = evidence(conn, number)
+        if ev is None:
+            ctx.block("SHIPMENT_NOT_FOUND", (
+                False, f"运单 {number} 不存在，请先在「运单登记」里登记", None,
+            ))
+            return
+        ctx.state["evidence"] = ev
+        ctx.state["blocks"] = evidence_blocks(ev)
+
+    def t_stop_guard(ctx: AgentContext) -> None:
+        stop = stop_advice(ctx.state["evidence"])
+        if not stop:
+            return
         reason, label = stop
         draft_id = f"d_{uuid.uuid4().hex[:12]}"
         conn.execute(
@@ -229,93 +248,143 @@ def generate(
             " VALUES (?,?,?,?,?,?,?,?,?)",
             (draft_id, number,
              f"已停止自动建议：{label}。请人工接手处置，并记录接手人与确认时间。",
-             "stopped", scenario, reason, "[]",
-             json.dumps(evidence_blocks(ev), ensure_ascii=False), now_iso()),
+             "stopped", ctx.payload["scenario"], reason, "[]",
+             json.dumps(ctx.state["blocks"], ensure_ascii=False), now_iso()),
         )
         conn.commit()
         audit(conn, user, "draft.stop_advice", "draft", draft_id, f"{number} {reason}")
         conn.commit()
-        return True, f"已停止自动建议（{label}），请人工接手", {
-            "id": draft_id, "status": "stopped",
-        }
+        ctx.block("STOP_ADVICE", (
+            True, f"已停止自动建议（{label}），请人工接手",
+            {"id": draft_id, "status": "stopped"},
+        ))
 
-    blocks = evidence_blocks(ev)
-    context = render_context(blocks)
-    gate_question = " ".join(
-        [number] + [f"{e['event_type']} {e.get('reason_code') or ''}" for e in ev["events"]]
-    )
-    gate = agent_core.gate(gate_question)
-
-    system_prompt, prompt_version = chat_service.active_prompt(conn)
-    draft_id = f"d_{uuid.uuid4().hex[:12]}"
-    now = now_iso()
-
-    if gate:
+    def t_redline(ctx: AgentContext) -> None:
+        ev = ctx.state["evidence"]
+        gate_question = " ".join(
+            [number] + [
+                f"{e['event_type']} {e.get('reason_code') or ''}" for e in ev["events"]
+            ]
+        )
+        gate = agent_core.gate(gate_question)
+        if not gate:
+            return
+        draft_id = f"d_{uuid.uuid4().hex[:12]}"
         conn.execute(
             "INSERT INTO drafts"
             " (id, shipment_no, content, status, scenario, gate_reason, citations_json,"
             "  evidence_json, created_at)"
             " VALUES (?,?,?,?,?,?,?,?,?)",
-            (draft_id, number, gate["message"], "taken_over", scenario, gate["reason_code"],
-             json.dumps([], ensure_ascii=False), json.dumps(blocks, ensure_ascii=False), now),
+            (draft_id, number, gate["message"], "taken_over", ctx.payload["scenario"],
+             gate["reason_code"], json.dumps([], ensure_ascii=False),
+             json.dumps(ctx.state["blocks"], ensure_ascii=False), now_iso()),
         )
         conn.commit()
         audit(conn, user, "draft.takeover", "draft", draft_id,
               f"{number} {gate['reason_code']}")
         conn.commit()
-        return True, "命中红线，已转人工接管，未生成草稿", {
-            "id": draft_id, "status": "taken_over", "content": gate["message"],
-        }
+        ctx.block("REDLINE", (
+            True, "命中红线，已转人工接管，未生成草稿",
+            {"id": draft_id, "status": "taken_over", "content": gate["message"]},
+        ))
 
-    user_prompt = (
-        "【参考片段】\n"
-        f"{context}\n\n"
-        "【使用者问题】\n"
-        f"运单 {number}：{SCENARIO_QUESTIONS[scenario]}\n\n"
-        "【要求】\n"
-        "只依据上面的记录回答，不要推断未记录的信息；"
-        f"{SCENARIO_RULES[scenario]}"
-        "涉及赔付、危险品、事故、判责时直接说明需人工接管。"
+    def t_generate(ctx: AgentContext) -> None:
+        ev = ctx.state["evidence"]
+        blocks = ctx.state["blocks"]
+        context = render_context(blocks)
+        system_prompt, prompt_version = chat_service.active_prompt(conn)
+        user_prompt = (
+            "【参考片段】\n"
+            f"{context}\n\n"
+            "【使用者问题】\n"
+            f"运单 {number}：{SCENARIO_QUESTIONS[ctx.payload['scenario']]}\n\n"
+            "【要求】\n"
+            "只依据上面的记录回答，不要推断未记录的信息；"
+            f"{SCENARIO_RULES[ctx.payload['scenario']]}"
+            "涉及赔付、危险品、事故、判责时直接说明需人工接管。"
+        )
+        try:
+            answer = agent_core.build_llm_client().complete(system_prompt, user_prompt)
+        except Exception as exc:  # 上游失败不伪造
+            ctx.block("LLM_ERROR", (False, f"模型调用失败：{exc}", None))
+            return
+        ctx.state["answer"] = answer
+        ctx.state["report"] = agent_core.check_output(answer)
+        ctx.state["prompt_version"] = prompt_version
+
+    def t_persist(ctx: AgentContext) -> None:
+        blocks = ctx.state["blocks"]
+        report = ctx.state["report"]
+        answer = ctx.state["answer"]
+        citations = [
+            {
+                "doc_id": "tms",
+                "doc_title": block["title"],
+                "version": block["version"],
+                "effective_from": block["effective_from"],
+                "lane_scope": block["lane_scope"],
+                "section": block["section"],
+                "chunk_id": "",
+                "quote": block["quote"],
+                "score": None,
+                "data_time": block["data_time"],
+            }
+            for block in blocks
+        ]
+        status = "pending_review" if report.passed else "needs_recheck"
+        draft_id = f"d_{uuid.uuid4().hex[:12]}"
+        conn.execute(
+            "INSERT INTO drafts"
+            " (id, shipment_no, content, status, scenario, guardrail, citations_json,"
+            "  evidence_json, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (draft_id, number, answer, status, ctx.payload["scenario"],
+             "；".join(report.violations) if report.violations else "",
+             json.dumps(citations, ensure_ascii=False),
+             json.dumps(blocks, ensure_ascii=False), now_iso()),
+        )
+        conn.commit()
+        audit(conn, user, "draft.generate", "draft", draft_id,
+              f"{number} 引用 {len(citations)} 条，"
+              f"护栏={'通过' if report.passed else '需复核'}，"
+              f"提示词={ctx.state['prompt_version']}")
+        conn.commit()
+        ctx.result = (True, "草稿已生成，等待审核", {
+            "id": draft_id, "status": status, "content": answer,
+        })
+
+    registry = ToolRegistry([
+        Tool("validate", t_validate, "校验处理场景参数"),
+        Tool("circuit", t_circuit, "误报率熔断检查"),
+        Tool("evidence", t_evidence, "加载运单与异常证据包"),
+        Tool("stop_guard", t_stop_guard, "停止自动建议场景检查", requires_human=True),
+        Tool("redline", t_redline, "红线闸门：命中即转人工", requires_human=True),
+        Tool("generate", t_generate, "调用模型生成查单/催单草稿"),
+        Tool("persist", t_persist, "落库并进入人工审核", requires_human=True),
+    ])
+    pipeline = AgentPipeline(
+        registry,
+        ["validate", "circuit", "evidence", "stop_guard", "redline", "generate", "persist"],
+        name="draft",
     )
-
-    try:
-        answer = agent_core.build_llm_client().complete(system_prompt, user_prompt)
-    except Exception as exc:  # 上游失败不伪造
-        return False, f"模型调用失败：{exc}", None
-
-    report = agent_core.check_output(answer)
-    citations = [
-        {
-            "doc_id": "tms",
-            "doc_title": block["title"],
-            "version": block["version"],
-            "effective_from": block["effective_from"],
-            "lane_scope": block["lane_scope"],
-            "section": block["section"],
-            "chunk_id": "",
-            "quote": block["quote"],
-            "score": None,
-            "data_time": block["data_time"],
-        }
-        for block in blocks
-    ]
-    status = "pending_review" if report.passed else "needs_recheck"
-    conn.execute(
-        "INSERT INTO drafts"
-        " (id, shipment_no, content, status, scenario, guardrail, citations_json,"
-        "  evidence_json, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?)",
-        (draft_id, number, answer, status, scenario,
-         "；".join(report.violations) if report.violations else "",
-         json.dumps(citations, ensure_ascii=False),
-         json.dumps(blocks, ensure_ascii=False), now),
+    ctx = AgentContext(
+        conn=conn, user=user,
+        payload={"shipment_no": number, "scenario": scenario},
     )
-    conn.commit()
-    audit(conn, user, "draft.generate", "draft", draft_id,
-          f"{number} 引用 {len(citations)} 条，护栏={'通过' if report.passed else '需复核'}"
-          f"，提示词={prompt_version}")
-    conn.commit()
-    return True, "草稿已生成，等待审核", {"id": draft_id, "status": status, "content": answer}
+    pipeline.run(ctx)
+
+    result = ctx.result if ctx.result is not None else (False, "流程未产生结果", None)
+    if isinstance(result, tuple) and len(result) == 3 and isinstance(result[2], dict):
+        result[2].setdefault("trace", ctx.trace)
+        result[2].setdefault("blocked_reason", ctx.state.get("block_reason", ""))
+    return result, ctx.trace
+
+
+def generate(
+    conn: sqlite3.Connection, user: dict, shipment_no: str, scenario: str = "query",
+) -> tuple[bool, str, dict | None]:
+    result, _trace = generate_with_trace(conn, user, shipment_no, scenario)
+    return result
 
 
 # ---------------------------------------------------------------------------

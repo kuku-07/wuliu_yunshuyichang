@@ -21,7 +21,9 @@ from typing import Any, Optional
 
 from ..security import strip_injection
 
-_PROTOTYPE_PATH = Path(__file__).resolve().parents[2] / "prototype" / "phase1_cli.py"
+_PROTOTYPE_PATH = (
+    Path(__file__).resolve().parents[2] / "archive" / "qa_assistant" / "phase1_cli.py"
+)
 
 _core_lock = threading.Lock()
 _core_module: Any = None
