@@ -1,0 +1,10 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+    body { margin:0; padding:26px 30px; width:900px; background:#F8FAFC;
+      font-family:"Microsoft YaHei",sans-serif; color:#0F172A; }
+    h1 { font-size:24px; margin:0 0 6px; color:#1F3864; }
+    .sub { color:#64748B; font-size:12px; margin-bottom:18px; }
+    table { width:100%; table-layout:fixed; border-collapse:collapse; background:#fff; font-size:13.5px; }
+    th { background:#E8EEF7; color:#1F3864; padding:7px; border:1px solid #CBD5E1; text-align:left; }
+    td { padding:7px; border:1px solid #E2E8F0; vertical-align:top; line-height:1.4; word-break:break-word; }
+    </style></head><body><h1>故障场景 · 执行记录</h1><div class="sub">环境：http://127.0.0.1:8088　时间：2026-11-06 10:11</div>
+    <table><colgroup><col style="width:8%"><col style="width:12%"><col style="width:24%"><col style="width:21%"><col style="width:25%"><col style="width:10%"></colgroup><thead><tr><th>编号</th><th>用例</th><th>输入 / 操作</th><th>期望</th><th>实际</th><th>结论</th></tr></thead><tbody><tr><td>F1</td><td>模型超时</td><td>模型桩抛出 timed out</td><td>LLM_TIMEOUT + 可重试</td><td>LLM_TIMEOUT：模型响应超时，请稍后重试</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>F2</td><td>上游异常</td><td>模型返回 5xx</td><td>LLM_UPSTREAM_ERROR</td><td>smoke_mainline 18/18 断言</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>F3</td><td>CSRF 缺失</td><td>POST 不带 csrf_token</td><td>400</td><td>HTTP 400</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>F4</td><td>慢响应</td><td>模型延迟 0.25s</td><td>>50ms 发 : ping 心跳</td><td>smoke_platform 8/8 断言</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>F5</td><td>重复提交</td><td>同 client_msg_id 两次</td><td>重放，不重复入库</td><td>smoke_mainline 18/18 断言</td><td><b style='color:#15803D'>通过</b></td></tr></tbody></table></body></html>

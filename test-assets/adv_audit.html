@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><base href="http://127.0.0.1:8088/">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="Eag7gl_9WJcwNLQGyqhuPqPD8nzUH4NEGC0JTe8A-1Y">
+  <title>会话详情 · 运输异常协作</title>
+  <link rel="stylesheet" href="/admin/static/admin.css?v=1793897661">
+</head>
+<body class="">
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">运</span>
+      <div>
+        <div class="brand-title">异常协作后台</div>
+        <div class="brand-sub">试点干线 · 华东</div>
+      </div>
+    </div>
+
+    
+    <nav class="nav">
+      <div class="nav-label">规则与问答</div>
+      <a class="nav-item " href="/admin/chat">一线问答</a>
+      <a class="nav-item " href="/admin/kb">规则知识库</a>
+      <a class="nav-item " href="/admin/prompts">提示词模板</a>
+      <div class="nav-label">业务</div>
+      <a class="nav-item " href="/admin/todos">我的待办</a>
+      <a class="nav-item " href="/admin/exceptions">异常与修复</a>
+      <a class="nav-item " href="/admin/workbench">查单工作台</a>
+      <a class="nav-item " href="/admin/metrics">指标</a>
+      <div class="nav-label">监督与追溯</div>
+      <a class="nav-item active" href="/admin/audit">对话审计</a>
+      <a class="nav-item " href="/admin/releases">发布记录</a>
+      
+      <div class="nav-label">权限</div>
+      <a class="nav-item " href="/admin/users">账号管理</a>
+      <a class="nav-item " href="/admin/lanes">干线管理</a>
+      <a class="nav-item " href="/admin/shipments">运单登记</a>
+      <a class="nav-item " href="/admin/grants">运单授权</a>
+      <a class="nav-item " href="/admin/data">数据管理</a>
+      
+    </nav>
+    
+
+    <div class="sidebar-user">
+      <div class="avatar">祁</div>
+      <div class="sidebar-user-info">
+        <div class="sidebar-user-name">祁心怡</div>
+        <div class="sidebar-user-role">系统管理员</div>
+      </div>
+      
+      <form method="post" action="/admin/logout">
+        <input type="hidden" name="csrf_token" value="Eag7gl_9WJcwNLQGyqhuPqPD8nzUH4NEGC0JTe8A-1Y">
+        <button class="btn btn-ghost btn-sm" type="submit">退出</button>
+      </form>
+      
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <h1 class="page-title">会话 s_85064789c808</h1>
+      <div class="topbar-right">
+        <span class="muted">请求 r_bfaf58986f0e</span>
+        <span class="role-pill">系统管理员</span>
+      </div>
+    </header>
+
+    
+    
+
+    <div class="content">
+      
+<div class="card">
+  <div class="section-head">
+    <h2>会话信息</h2>
+    <a class="btn btn-ghost btn-sm" href="/admin/audit">返回列表</a>
+  </div>
+  <div class="meta-grid">
+    <div class="meta-item"><div class="k">员工ID</div><div class="v">u_sup1</div></div>
+    <div class="meta-item"><div class="k">线路</div><div class="v">试点干线-华东</div></div>
+    <div class="meta-item"><div class="k">运单号</div><div class="v">-</div></div>
+    <div class="meta-item"><div class="k">会话状态</div><div class="v">active</div></div>
+    <div class="meta-item"><div class="k">开始时间</div><div class="v">2026-11-06 10:08:19</div></div>
+    <div class="meta-item"><div class="k">最后活动</div><div class="v">2026-11-06 10:08:19</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>消息记录</h2>
+  <div class="chat">
+    
+    <div class="message user">
+      <div class="message-head">
+        <span class="badge badge-approved">员工</span>
+        
+        
+        
+        
+        <span class="muted" style="margin-left:auto;">2026-11-06 10:08:19</span>
+      </div>
+
+      <div class="message-body">客户能赔多少钱？</div>
+
+      
+
+      
+
+      
+
+      
+      <details class="message-flag">
+        <summary class="muted" style="cursor:pointer;">标记此消息</summary>
+        <form method="post" action="/admin/audit/s_85064789c808/flags">
+          <input type="hidden" name="csrf_token" value="Eag7gl_9WJcwNLQGyqhuPqPD8nzUH4NEGC0JTe8A-1Y">
+          <input type="hidden" name="message_id" value="m_ce3d04c1b5b1">
+          <select name="flag_type" required>
+            <option value="">选择标记类型</option>
+            
+            <option value="REDLINE_BYPASS">红线绕过</option>
+            
+            <option value="UNAUTHORIZED_QUERY">越权查询</option>
+            
+            <option value="NO_EVIDENCE_SIGN">未取证签收</option>
+            
+            <option value="UNSIGNED_OUTBOUND">未签核外发</option>
+            
+            <option value="PII_LEAK">敏感信息外泄</option>
+            
+          </select>
+          <input type="text" name="reason" placeholder="原因说明（至少 5 字）" required>
+          <button class="btn btn-primary btn-sm" type="submit">记录标记</button>
+        </form>
+      </details>
+      
+    </div>
+    
+    <div class="message assistant">
+      <div class="message-head">
+        <span class="badge badge-active">助手</span>
+        <span class="badge badge-takeover">已接管</span>
+        <span class="muted">REDLINE_COMPENSATION</span>
+        <span class="muted">模型 未调用</span>
+        <span class="muted">3 ms</span>
+        <span class="muted" style="margin-left:auto;">2026-11-06 10:08:19</span>
+      </div>
+
+      <div class="message-body">涉及赔付或赔偿认定，规则明确要求人工接管，系统不生成任何金额建议。</div>
+
+      
+
+      
+      <div class="citations">
+        
+        <div class="citation">
+          <b>闸门/接管</b>
+          <div class="muted">REDLINE_COMPENSATION 命中词=赔多少</div>
+          <div class="muted small">2026-11-06 10:08:19 · r_c64ef0afba1c</div>
+        </div>
+        
+      </div>
+      
+
+      
+
+      
+      <details class="message-flag">
+        <summary class="muted" style="cursor:pointer;">标记此消息</summary>
+        <form method="post" action="/admin/audit/s_85064789c808/flags">
+          <input type="hidden" name="csrf_token" value="Eag7gl_9WJcwNLQGyqhuPqPD8nzUH4NEGC0JTe8A-1Y">
+          <input type="hidden" name="message_id" value="m_73ef18299b4d">
+          <select name="flag_type" required>
+            <option value="">选择标记类型</option>
+            
+            <option value="REDLINE_BYPASS">红线绕过</option>
+            
+            <option value="UNAUTHORIZED_QUERY">越权查询</option>
+            
+            <option value="NO_EVIDENCE_SIGN">未取证签收</option>
+            
+            <option value="UNSIGNED_OUTBOUND">未签核外发</option>
+            
+            <option value="PII_LEAK">敏感信息外泄</option>
+            
+          </select>
+          <input type="text" name="reason" placeholder="原因说明（至少 5 字）" required>
+          <button class="btn btn-primary btn-sm" type="submit">记录标记</button>
+        </form>
+      </details>
+      
+    </div>
+    
+  </div>
+</div>
+
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+    body { margin:0; padding:26px 30px; width:900px; background:#F8FAFC;
+      font-family:"Microsoft YaHei",sans-serif; color:#0F172A; }
+    h1 { font-size:24px; margin:0 0 6px; color:#1F3864; }
+    .sub { color:#64748B; font-size:12px; margin-bottom:18px; }
+    table { width:100%; table-layout:fixed; border-collapse:collapse; background:#fff; font-size:13.5px; }
+    th { background:#E8EEF7; color:#1F3864; padding:7px; border:1px solid #CBD5E1; text-align:left; }
+    td { padding:7px; border:1px solid #E2E8F0; vertical-align:top; line-height:1.4; word-break:break-word; }
+    </style></head><body><h1>正常场景 · 执行记录</h1><div class="sub">环境：http://127.0.0.1:8088　时间：2026-11-06 10:11</div>
+    <table><colgroup><col style="width:8%"><col style="width:12%"><col style="width:24%"><col style="width:21%"><col style="width:25%"><col style="width:10%"></colgroup><thead><tr><th>编号</th><th>用例</th><th>输入 / 操作</th><th>期望</th><th>实际</th><th>结论</th></tr></thead><tbody><tr><td>N1</td><td>规则问答</td><td>客户临时改地址属于哪一类异常？</td><td>200 + done + 引用 ≥1</td><td>首字 32ms，引用 3 条，done</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>N2</td><td>查单草稿</td><td>YD20261030002 → 生成草稿</td><td>pending_review + 引用 >0</td><td>草稿已生成，进入待审核</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>N3</td><td>引用可追溯</td><td>打开审计详情</td><td>含引用/闸门/护栏/请求 ID</td><td>页面可见完整链路</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>N4</td><td>异常导入路由</td><td>导入 TMS 样本</td><td>事件 3、修复 1、路由覆盖 100%</td><td>smoke_mainline 18/18</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>N5</td><td>审计导出</td><td>创建导出任务并下载</td><td>CSV 含请求 ID 列</td><td>smoke_mainline 18/18</td><td><b style='color:#15803D'>通过</b></td></tr></tbody></table></body></html>

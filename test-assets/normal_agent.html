@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><base href="http://127.0.0.1:8088/">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="HA_AYUBjpi3TKOqaGPX9JMf6PleNp08E3I7vC3Tr3Go">
+  <title>一线问答 · 运输异常协作</title>
+  <link rel="stylesheet" href="/admin/static/admin.css?v=1793897661">
+</head>
+<body class="chat-page agent-body">
+<header class="agent-top">
+  <div class="agent-brand">
+    <span class="brand-mark">运</span>
+    <div>
+      <div class="brand-title">异常协作 · 一线问答</div>
+      <div class="brand-sub">运输异常与签收协作智能体</div>
+    </div>
+  </div>
+  <div class="agent-user">
+    
+    <a class="btn btn-ghost btn-sm" href="/admin/kb">管理后台</a>
+    
+    <span class="muted">李强</span>
+    <form method="post" action="/admin/logout" class="inline-form">
+      <input type="hidden" name="csrf_token" value="HA_AYUBjpi3TKOqaGPX9JMf6PleNp08E3I7vC3Tr3Go">
+      <button class="btn btn-ghost btn-sm" type="submit">退出</button>
+    </form>
+  </div>
+</header>
+<main class="agent-main">
+  
+<div class="chat-shell"
+     data-session="s_807aa0bd967c"
+     data-csrf="HA_AYUBjpi3TKOqaGPX9JMf6PleNp08E3I7vC3Tr3Go"
+     data-max="2000">
+
+  <aside class="chat-sider">
+    <div class="sider-head">
+      <span class="sider-title">会话</span>
+      <form method="post" action="/agent/session">
+        <input type="hidden" name="csrf_token" value="HA_AYUBjpi3TKOqaGPX9JMf6PleNp08E3I7vC3Tr3Go">
+        <button class="sider-new" type="submit">＋ 新建</button>
+      </form>
+    </div>
+    <div class="sider-list">
+      
+      <div class="sider-item active">
+        <a class="sider-link" href="/agent?session=s_807aa0bd967c">
+          <span class="sider-text">客户临时改地址属于哪一类异常？</span>
+          <span class="sider-meta">2 条 · 试点干线-华东</span>
+        </a>
+        <form method="post" action="/agent/s_807aa0bd967c/delete" class="sider-del"
+              onsubmit="return confirm('删除会话「客户临时改地址属于哪一类异常？」及其全部消息？');">
+          <input type="hidden" name="csrf_token" value="HA_AYUBjpi3TKOqaGPX9JMf6PleNp08E3I7vC3Tr3Go">
+          <button type="submit" title="删除会话">×</button>
+        </form>
+      </div>
+      
+      <div class="sider-item ">
+        <a class="sider-link" href="/agent?session=s_525b231ce9a7">
+          <span class="sider-text">卸货排队超过 4 小时算异常吗？</span>
+          <span class="sider-meta">8 条 · 试点干线-华东</span>
+        </a>
+        <form method="post" action="/agent/s_525b231ce9a7/delete" class="sider-del"
+              onsubmit="return confirm('删除会话「卸货排队超过 4 小时算异常吗？」及其全部消息？');">
+          <input type="hidden" name="csrf_token" value="HA_AYUBjpi3TKOqaGPX9JMf6PleNp08E3I7vC3Tr3Go">
+          <button type="submit" title="删除会话">×</button>
+        </form>
+      </div>
+      
+    </div>
+    <div class="sider-foot">
+      <form method="post" action="/agent/lane" class="lane-form">
+        <input type="hidden" name="csrf_token" value="HA_AYUBjpi3TKOqaGPX9JMf6PleNp08E3I7vC3Tr3Go">
+        <input type="hidden" name="session_id" value="s_807aa0bd967c">
+        <label class="lane-label">
+          <span>作业线路</span>
+          <select name="lane_scope" onchange="this.form.submit()">
+            
+            <option value="试点干线-华东" selected>试点干线-华东（华东）</option>
+            
+          </select>
+        </label>
+      </form>
+      <p class="lane-hint">切换后检索范围与运单校验都按该线路走</p>
+    </div>
+  </aside>
+
+  <div class="chat-body">
+    <div class="chat-top">
+      <div class="chat-top-left">
+        <span class="chip chip-ghost mono">s_807aa0bd967c</span>
+        <span class="muted small">2 条消息</span>
+        <span class="ship-chip" id="ship-chip" hidden></span>
+      </div>
+      <div class="chat-top-right">
+        <span class="chat-state" id="chat-state">空闲</span>
+      </div>
+    </div>
+
+    <div class="chat-scroll" id="chat-scroll">
+      <div class="chat-hero" id="chat-hero" hidden>
+        <h2 class="hero-title">有什么我能帮你的吗？</h2>
+        <p class="hero-sub">问规则与口径 · 涉及赔付、危险品、事故会自动转人工</p>
+        <div class="suggestions">
+          
+          <button type="button" class="suggestion" data-q="客户临时改地址，异常应归为哪一类？">客户临时改地址，异常应归为哪一类？</button>
+          
+          <button type="button" class="suggestion" data-q="到货准时率和回执及时率有什么区别？">到货准时率和回执及时率有什么区别？</button>
+          
+          <button type="button" class="suggestion" data-q="签收单缺少收货人签字怎么办？">签收单缺少收货人签字怎么办？</button>
+          
+          <button type="button" class="suggestion" data-q="卸货排队超过 4 小时算异常吗？">卸货排队超过 4 小时算异常吗？</button>
+          
+          <button type="button" class="suggestion" data-q="异常处理人需要多久内响应？">异常处理人需要多久内响应？</button>
+          
+          <button type="button" class="suggestion" data-q="代收需要什么授权？">代收需要什么授权？</button>
+          
+        </div>
+      </div>
+
+      <div class="chat-log" id="chat-log">
+        
+          
+          <div class="msg msg-user"><div class="bubble">客户临时改地址属于哪一类异常？</div></div>
+          
+        
+          
+          <div class="msg msg-bot">
+            <div class="avatar-bot">运</div>
+            <div class="bubble">
+              
+                <div class="answer-body">结论（离线抽取，未经过模型生成）：
+- 客户临时改地址属于「地址变更」，不是「延误」
+- 异常分为固定核心类型：延误、货损、货差、拒收、地址变更、单证缺失
+- 本规则适用于试点干线-华东的整车与零担运单，覆盖在途、到货、回执与异常升级环节
+
+依据：
+  [引用1] 《运输异常处置与签收协作规则（试点版）》v0.1 · 2. 异常分类
+  [引用2] 《运输异常处置与签收协作规则（试点版）》v0.1 · 2. 异常分类
+  [引用3] 《运输异常处置与签收协作规则（试点版）》v0.1 · 1. 适用范围
+
+不确定项：本回答为离线兜底抽取，未做语义推理，请人工确认。</div>
+                
+                <details class="cites">
+                  <summary>引用来源（3）</summary>
+                  
+                  <div class="cite">
+                    <div class="cite-head">运输异常处置与签收协作规则（试点版） · v0.1 · 2. 异常分类</div>
+                    <div class="muted small">生效 2026-11-01 · 适用 试点干线-华东</div>
+                    <div class="cite-quote">客户临时改地址属于「地址变更」，不是「延误」；卸货排队超过 4 小时属于「延误」并需记录排队起止时间；封路导致无法通行属于「延误」，需附路段与封路证明。</div>
+                  </div>
+                  
+                  <div class="cite">
+                    <div class="cite-head">运输异常处置与签收协作规则（试点版） · v0.1 · 2. 异常分类</div>
+                    <div class="muted small">生效 2026-11-01 · 适用 试点干线-华东</div>
+                    <div class="cite-quote">异常分为固定核心类型：延误、货损、货差、拒收、地址变更、单证缺失。核心类型不可自定义；细分原因以原因码记录，原因码可由规则管理员新增，但不得改变核心类型。</div>
+                  </div>
+                  
+                  <div class="cite">
+                    <div class="cite-head">运输异常处置与签收协作规则（试点版） · v0.1 · 1. 适用范围</div>
+                    <div class="muted small">生效 2026-11-01 · 适用 试点干线-华东</div>
+                    <div class="cite-quote">本规则适用于试点干线-华东的整车与零担运单，覆盖在途、到货、回执与异常升级环节。未纳入试点的线路仍按原流程执行。</div>
+                  </div>
+                  
+                </details>
+                
+              
+              <div class="disclaimer">仅内部参考，不对外发送</div>
+            </div>
+          </div>
+          
+        
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-main">
+        <textarea id="q" rows="1" maxlength="2000" placeholder="发消息…"></textarea>
+        <button class="send-btn" id="send" type="button" title="发送（Ctrl + Enter）">↑</button>
+      </div>
+      <div class="composer-meta">
+        <label class="ship-inline">
+          <span>运单</span>
+          <input type="text" id="shipment" maxlength="40" autocomplete="off"
+                 placeholder="可选，填了就校验授权">
+        </label>
+        <span class="counter" id="counter">0/2000</span>
+        <span class="note">回答仅供内部参考，不对外发送</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var shell = document.querySelector(".chat-shell");
+  var scroll = document.getElementById("chat-scroll");
+  var log = document.getElementById("chat-log");
+  var hero = document.getElementById("chat-hero");
+  var input = document.getElementById("q");
+  var sendBtn = document.getElementById("send");
+  var counter = document.getElementById("counter");
+  var stateEl = document.getElementById("chat-state");
+  var shipInput = document.getElementById("shipment");
+  var shipChip = document.getElementById("ship-chip");
+
+  var SESSION = shell.dataset.session;
+  var CSRF = shell.dataset.csrf;
+  var MAX = parseInt(shell.dataset.max, 10) || 2000;
+
+  var busy = false;
+  var raf = null;
+  var buffer = "";
+  var bodyEl = null;
+  var current = null;
+  var slowTimer = null;
+  var lastQuestion = "";
+
+  function setState(text) { stateEl.textContent = text; }
+  function scrollDown() { scroll.scrollTop = scroll.scrollHeight; }
+
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 180) + "px";
+  }
+  input.addEventListener("input", function () {
+    counter.textContent = input.value.length + "/" + MAX;
+    autosize();
+  });
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
+  });
+  sendBtn.addEventListener("click", submit);
+
+  Array.prototype.forEach.call(document.querySelectorAll(".suggestion"), function (btn) {
+    btn.addEventListener("click", function () {
+      input.value = btn.dataset.q;
+      input.dispatchEvent(new Event("input"));
+      input.focus();
+    });
+  });
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function hideHero() { if (hero) hero.hidden = true; }
+
+  function addUser(text) {
+    hideHero();
+    var wrap = el("div", "msg msg-user");
+    wrap.appendChild(el("div", "bubble", text));
+    log.appendChild(wrap);
+    scrollDown();
+  }
+
+  function addBot() {
+    var wrap = el("div", "msg msg-bot");
+    wrap.appendChild(el("div", "avatar-bot", "运"));
+    var bubble = el("div", "bubble");
+    var skeleton = el("div", "skeleton", "正在检索规则…");
+    bubble.appendChild(skeleton);
+    wrap.appendChild(bubble);
+    log.appendChild(wrap);
+    scrollDown();
+    current = { wrap: wrap, bubble: bubble, skeleton: skeleton, body: null };
+  }
+
+  function ensureBody() {
+    if (!current) addBot();
+    if (current.body) return current.body;
+    if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+    bodyEl = el("div", "answer-body");
+    current.bubble.appendChild(bodyEl);
+    current.body = bodyEl;
+    return bodyEl;
+  }
+
+  function keepBottom(node) {
+    var disclaimer = current.bubble.querySelector(".disclaimer");
+    if (disclaimer) current.bubble.insertBefore(node, disclaimer);
+    else current.bubble.appendChild(node);
+    scrollDown();
+  }
+
+  function pump() {
+    if (!bodyEl || !buffer.length) { raf = null; return; }
+    var step = buffer.length > 200 ? buffer.length : 3;
+    bodyEl.textContent += buffer.slice(0, step);
+    buffer = buffer.slice(step);
+    scrollDown();
+    raf = requestAnimationFrame(pump);
+  }
+
+  function onDelta(text) {
+    ensureBody();
+    buffer += text;
+    if (!raf) raf = requestAnimationFrame(pump);
+  }
+
+  function addDisclaimer() {
+    if (!current) return;
+    if (!current.bubble.querySelector(".disclaimer")) {
+      current.bubble.appendChild(el("div", "disclaimer", "仅内部参考，不对外发送"));
+    }
+  }
+
+  function renderCitations(items) {
+    if (!current) return;
+    if (!items || !items.length) {
+      keepBottom(el("div", "muted small", "未命中规则文档，需人工确认"));
+      return;
+    }
+    var box = el("details", "cites");
+    box.appendChild(el("summary", "", "引用来源（" + items.length + "）"));
+    items.forEach(function (c) {
+      var item = el("div", "cite");
+      item.appendChild(el("div", "cite-head",
+        c.doc_title + " · v" + c.version + " · " + c.section));
+      item.appendChild(el("div", "muted small",
+        "生效 " + (c.effective_from || "-") + " · 适用 " + (c.lane_scope || "-")));
+      item.appendChild(el("div", "cite-quote", c.quote));
+      box.appendChild(item);
+    });
+    keepBottom(box);
+    box.open = true;
+  }
+
+  function onTakeover(data) {
+    if (!current) addBot();
+    if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+    keepBottom(el("div", "banner banner-warn", "已转人工接管，系统不提供自动建议"));
+    ensureBody().textContent = data.message || "";
+    keepBottom(el("div", "muted small", "原因码 · " + data.reason_code +
+      (data.matched_terms && data.matched_terms.length
+        ? "（命中：" + data.matched_terms.join("、") + "）" : "")));
+    addDisclaimer();
+  }
+
+  function onGuardrail(data) {
+    if (!current) return;
+    if (data && data.needs_review) {
+      keepBottom(el("div", "banner banner-review", "该回答未通过自动校验，请人工核对后再使用"));
+      if (data.violations && data.violations.length) {
+        keepBottom(el("div", "muted small", "校验项：" + data.violations.join("；")));
+      }
+    }
+  }
+
+  function onDone(data) {
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    if (bodyEl && buffer) { bodyEl.textContent += buffer; buffer = ""; }
+    addDisclaimer();
+    if (data && data.latency_ms != null && current && current.body && !data.takeover) {
+      keepBottom(el("div", "muted small",
+        "耗时 " + data.latency_ms + "ms · 提示词 " + (data.prompt_version || "-") +
+        " · " + (data.model || "-")));
+    }
+  }
+
+  function onError(data) {
+    if (!current) addBot();
+    if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+    var box = el("div", "banner banner-error");
+    box.textContent = (data.message || "本次未生成回答") +
+      (data.request_id ? "（编号 " + data.request_id + "）" : "");
+    if (lastQuestion) {
+      var retry = el("button", "btn btn-ghost btn-sm", "重试");
+      retry.type = "button";
+      retry.style.marginLeft = "8px";
+      retry.addEventListener("click", function () {
+        input.value = lastQuestion;
+        input.dispatchEvent(new Event("input"));
+        submit();
+      });
+      box.appendChild(retry);
+    }
+    keepBottom(box);
+  }
+
+  function handleEvent(raw) {
+    var ev = null, data = null;
+    raw.split("\n").forEach(function (line) {
+      if (line.indexOf("event: ") === 0) ev = line.slice(7).trim();
+      else if (line.indexOf("data: ") === 0) {
+        try { data = JSON.parse(line.slice(6)); } catch (e) { data = null; }
+      }
+    });
+    if (!ev) return;
+
+    switch (ev) {
+      case "meta":
+        if (data && data.shipment) {
+          var s = data.shipment;
+          shipChip.textContent = s.shipment_no + " · " + s.lane_scope +
+            (s.customer ? " · " + s.customer : "") +
+            (s.status_text ? " · " + s.status_text : "");
+          shipChip.hidden = false;
+        }
+        break;
+      case "status":
+        if (data.stage === "retrieving") setState("检索中");
+        else if (data.stage === "generating") { setState("生成中"); ensureBody(); }
+        else if (data.stage === "verifying") setState("校验中");
+        else if (data.stage === "gated") setState("接管判断");
+        break;
+      case "delta":
+        onDelta(data.text || "");
+        break;
+      case "citations":
+        renderCitations(data.items);
+        break;
+      case "takeover":
+        onTakeover(data);
+        setState("已接管");
+        break;
+      case "guardrail":
+        onGuardrail(data);
+        break;
+      case "done":
+        onDone(data);
+        if (!(data && data.takeover)) setState("空闲");
+        break;
+      case "error":
+        onError(data);
+        setState("出错");
+        break;
+    }
+  }
+
+  function finish() {
+    busy = false;
+    if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+    if (stateEl.textContent !== "已接管" && stateEl.textContent !== "出错") setState("空闲");
+  }
+
+  async function submit() {
+    var text = input.value.trim();
+    if (!text || busy) return;
+    if (text.length > MAX) { alert("问题超过 " + MAX + " 字"); return; }
+
+    busy = true;
+    lastQuestion = text;
+    sendBtn.disabled = true;
+    input.disabled = true;
+    input.value = "";
+    input.style.height = "auto";
+    counter.textContent = "0/" + MAX;
+    setState("提交中");
+
+    addUser(text);
+    buffer = "";
+    bodyEl = null;
+    addBot();
+
+    // 8 秒还没等到第一个事件，就告诉用户「还在处理」，别让人以为卡死
+    slowTimer = setTimeout(function () {
+      if (current && current.skeleton) {
+        current.skeleton.textContent = "检索较慢，仍在处理…";
+      }
+    }, 8000);
+
+    var fd = new FormData();
+    fd.append("question", text);
+    fd.append("session_id", SESSION);
+    fd.append("csrf_token", CSRF);
+    fd.append("shipment_no", (shipInput.value || "").trim());
+
+    try {
+      var resp = await fetch("/admin/api/chat/stream", { method: "POST", body: fd });
+      if (!resp.ok) {
+        var payload = {};
+        try { payload = await resp.json(); } catch (e) {}
+        if (current.skeleton) { current.skeleton.remove(); current.skeleton = null; }
+        if (shipChip) shipChip.hidden = true;
+        onError(payload);
+        setState("出错");
+        finish();
+        return;
+      }
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder("utf-8");
+      var buf = "";
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buf += decoder.decode(chunk.value, { stream: true });
+        var idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          var raw = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
+          handleEvent(raw);
+        }
+      }
+    } catch (err) {
+      onError({ message: "连接中断：" + err });
+      setState("出错");
+    } finally {
+      if (raf) { cancelAnimationFrame(raf); raf = null; }
+      if (bodyEl && buffer) { bodyEl.textContent += buffer; buffer = ""; }
+      finish();
+    }
+  }
+
+  autosize();
+  scrollDown();
+  input.focus();
+})();
+</script>
+
+</body>
+</html>

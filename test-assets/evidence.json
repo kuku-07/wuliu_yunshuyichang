@@ -1,0 +1,128 @@
+{
+  "env": {
+    "base": "http://127.0.0.1:8088",
+    "time": "2026-11-06 10:08:11"
+  },
+  "normal": {
+    "session": "s_807aa0bd967c",
+    "first_ms": 32,
+    "total_ms": 37,
+    "citation_count": 3,
+    "status": 200,
+    "done": true,
+    "shots": [
+      "ui_normal_agent.png",
+      "ui_normal_workbench.png"
+    ]
+  },
+  "boundary": {
+    "bad_format": {
+      "status": 400,
+      "body": "{\"code\":\"INVALID_REQUEST\",\"message\":\"请求参数不合法：运单号格式不正确（示例 YD20261030001）\",\"data\":{},\"request_id\":\"r_ae81c0a9530d\"}"
+    },
+    "long_question": {
+      "status": 422,
+      "body": "{\"code\":\"QUESTION_TOO_LONG\",\"message\":\"问题超过 2000 字，请精简后重试\",\"data\":{},\"request_id\":\"r_b5ea3d991d96\"}"
+    },
+    "unauthorized": {
+      "status": 403,
+      "body": "{\"code\":\"SHIPMENT_FORBIDDEN\",\"message\":\"你无权查询该运单，请联系管理员授权\",\"data\":{},\"request_id\":\"r_34a55a1dfdbf\"}"
+    },
+    "delete_active": {
+      "status": 409,
+      "body": "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>CONFLICT · 运输异常协作后台</title>\n  <link rel=\"stylesheet\""
+    },
+    "page_negative": {
+      "status": 200
+    }
+  },
+  "adversarial": {
+    "redline": {
+      "status": 200,
+      "takeover": {
+        "reason_code": "REDLINE_COMPENSATION",
+        "message": "涉及赔付或赔偿认定，规则明确要求人工接管，系统不生成任何金额建议。",
+        "matched_terms": [
+          "赔多少"
+        ]
+      },
+      "events": [
+        "meta",
+        "status",
+        "status",
+        "takeover",
+        "guardrail",
+        "done"
+      ]
+    },
+    "injection": {
+      "upload_status": 200,
+      "contains_upload": false
+    },
+    "shots": [
+      "ui_adversarial_audit.png"
+    ]
+  },
+  "permission": {
+    "staff_admin_page": 403,
+    "staff_admin_login": "/admin/login?err=%E8%AF%A5%E8%B4%A6%E5%8F%B7%E6%B2%A1%E6%9C%89%E7%AE%A1%E7%90%86%E5%90%8E%E5%8F%B0%E6%9D%83%E9%99%90%EF%BC%8C%E8%AF%B7%E4%BB%8E%E5%91%98%E5%B7%A5%E7%AB%AF%E7%99%BB%E5%BD%95",
+    "unauth_stream": 401,
+    "shots": [
+      "ui_permission_403.png"
+    ]
+  },
+  "failure": {
+    "status": 200,
+    "events": [
+      {
+        "event": "meta",
+        "data": {
+          "request_id": "r_4c94bcb384c6",
+          "session_id": "s_a95c29928a51",
+          "user_message_id": "m_79239fbb8231",
+          "shipment": null
+        }
+      },
+      {
+        "event": "status",
+        "data": {
+          "stage": "retrieving",
+          "label": "正在检索规则…"
+        }
+      },
+      {
+        "event": "status",
+        "data": {
+          "stage": "generating",
+          "label": "正在生成处置草稿…"
+        }
+      },
+      {
+        "event": "error",
+        "data": {
+          "code": "LLM_TIMEOUT",
+          "message": "模型响应超时，请稍后重试",
+          "retryable": true
+        }
+      }
+    ]
+  },
+  "extra": {
+    "missing_csrf": {
+      "status": 400,
+      "body": "{\"code\":\"INVALID_REQUEST\",\"message\":\"页面已过期，请刷新后重试\",\"data\":{},\"request_id\":\"r_c8dbc56feda9\"}"
+    },
+    "lane_denied": {
+      "status": 303,
+      "location": "/admin/chat?session=s_85064789c808&err=%E7%BA%BF%E8%B7%AF%E4%B8%8D%E5%AD%98%E5%9C%A8%E6%88%96%E4%B8%8D%E5%8F%AF%E7%94%A8"
+    },
+    "injection": {
+      "raw_hits": 0,
+      "audit_detail": "注入样本-测试 v0.1，切片 1，脱敏 0 处，注入清洗 1 行"
+    },
+    "stop": {
+      "tool": "└─ 在此停止：stop_guard",
+      "result": "结果：成功　已停止自动建议（轨迹超过 2 小时未刷新（GPS 弱网或停滞后）），请人工接手"
+    }
+  }
+}

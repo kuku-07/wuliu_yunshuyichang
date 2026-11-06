@@ -1,0 +1,10 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+    body { margin:0; padding:26px 30px; width:900px; background:#F8FAFC;
+      font-family:"Microsoft YaHei",sans-serif; color:#0F172A; }
+    h1 { font-size:24px; margin:0 0 6px; color:#1F3864; }
+    .sub { color:#64748B; font-size:12px; margin-bottom:18px; }
+    table { width:100%; table-layout:fixed; border-collapse:collapse; background:#fff; font-size:13.5px; }
+    th { background:#E8EEF7; color:#1F3864; padding:7px; border:1px solid #CBD5E1; text-align:left; }
+    td { padding:7px; border:1px solid #E2E8F0; vertical-align:top; line-height:1.4; word-break:break-word; }
+    </style></head><body><h1>边界场景 · 执行记录</h1><div class="sub">环境：http://127.0.0.1:8088　时间：2026-11-06 10:11</div>
+    <table><colgroup><col style="width:8%"><col style="width:12%"><col style="width:24%"><col style="width:21%"><col style="width:25%"><col style="width:10%"></colgroup><thead><tr><th>编号</th><th>用例</th><th>输入 / 操作</th><th>期望</th><th>实际</th><th>结论</th></tr></thead><tbody><tr><td>B1</td><td>运单号 10 位</td><td>YD2026103000</td><td>400 INVALID_REQUEST</td><td>HTTP 400，格式错误提示</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>B2</td><td>问题 2001 字</td><td>超长问题</td><td>422 QUESTION_TOO_LONG</td><td>HTTP 422，上限 2000 字</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>B3</td><td>未授权运单</td><td>YD20261030001（无授权账号）</td><td>403 SHIPMENT_FORBIDDEN</td><td>HTTP 403，流前拒绝</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>B4</td><td>删除生效规则</td><td>doc_001</td><td>409 CONFLICT</td><td>HTTP 409，提示先下线</td><td><b style='color:#15803D'>通过</b></td></tr><tr><td>B5</td><td>分页 -1</td><td>/admin/audit?page=-1</td><td>200 且归一到第 1 页</td><td>HTTP 200</td><td><b style='color:#15803D'>通过</b></td></tr></tbody></table></body></html>
