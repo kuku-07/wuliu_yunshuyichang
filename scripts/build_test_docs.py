@@ -14,7 +14,8 @@ from PIL import Image
 
 ROOT = Path(r"D:\wuliu_yunshuyichang")
 DOCS = ROOT / "docs"
-ASSETS = ROOT / "test-assets"
+TEST_DOCS = DOCS / "测试"
+ASSETS = ROOT / "docs" / "测试" / "assets"
 NAVY = RGBColor(0x1F, 0x38, 0x64)
 GRAY = RGBColor(0x59, 0x59, 0x59)
 HEAD_FILL = "E8EEF7"
@@ -379,7 +380,7 @@ def build_plan_md() -> Path:
         "- 场景过程文档包含执行记录图与关键页面截图。",
         "",
     ]
-    path = DOCS / "测试方案.md"
+    path = TEST_DOCS / "测试方案.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
@@ -457,7 +458,7 @@ def build_plan_docx() -> Path:
         "60% 催单等业务假设用于需求分析，不作为本测试的通过条件。",
     ])
 
-    path = DOCS / "测试方案.docx"
+    path = TEST_DOCS / "测试方案.docx"
     doc.save(path)
     return path
 
@@ -519,7 +520,7 @@ def build_scenario_docx(key: str) -> Path:
     passed = sum(1 for c in cases if c[6] == "通过")
     p(doc, f"通过率：{passed}/{len(cases)}；未发现 500、越权或红线模型调用。")
 
-    path = DOCS / f"{meta['title']}.docx"
+    path = TEST_DOCS / f"{meta['title']}.docx"
     doc.save(path)
     return path
 
@@ -615,6 +616,7 @@ def build_deploy_docx(lan_ip: str) -> Path:
 
 def main():
     DOCS.mkdir(exist_ok=True)
+    TEST_DOCS.mkdir(parents=True, exist_ok=True)
     prepare_crops()
     print(build_plan_md())
     print(build_plan_docx())

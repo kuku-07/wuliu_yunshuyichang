@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 
 ROOT = Path(r"D:\wuliu_yunshuyichang")
-ASSETS = ROOT / "test-assets"
+ASSETS = ROOT / "docs" / "测试" / "assets"
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 BASE = "http://127.0.0.1:8088"
 
