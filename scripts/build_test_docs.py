@@ -14,8 +14,8 @@ from PIL import Image
 
 ROOT = Path(r"D:\wuliu_yunshuyichang")
 DOCS = ROOT / "docs"
-TEST_DOCS = DOCS / "测试"
-ASSETS = ROOT / "docs" / "测试" / "assets"
+TEST_DOCS = ROOT / "测试"
+ASSETS = ROOT / "测试" / "assets"
 NAVY = RGBColor(0x1F, 0x38, 0x64)
 GRAY = RGBColor(0x59, 0x59, 0x59)
 HEAD_FILL = "E8EEF7"
@@ -609,7 +609,7 @@ def build_deploy_docx(lan_ip: str) -> Path:
     p(doc, "当前服务监听 0.0.0.0:8088，已在本机与局域网地址验证；没有公网域名与备案，文档中的 127.0.0.1 与 10.201.14.145 仅在同一网络内可访问。"
            "如需互联网访问，需提供云服务器、域名与备案信息后，按第四节执行。")
 
-    path = DOCS / "MVP系统上线部署地址.docx"
+    path = TEST_DOCS / "MVP系统上线部署地址.docx"
     doc.save(path)
     return path
 
