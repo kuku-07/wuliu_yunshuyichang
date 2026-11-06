@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
     patrol_thread = threading.Thread(target=_patrol, daemon=True)
     patrol_thread.start()
 
-    # 90 天留存改为「申请 → 合规审批 → 执行」，不再启动即删（docs/02 §7）
+    # 90 天留存改为「申请 → 合规审批 → 执行」，不再启动即删（停止自动建议口径）
 
     yield
 

@@ -1,6 +1,6 @@
 """客户 / 承运商只读门户。
 
-按 docs/02 §3 的业务角色补入口：客户与承运商不后台，只能看
+按 角色口径 的业务角色补入口：客户与承运商不后台，只能看
 授权给他们的运单（`authorization_grants`），且字段脱敏。
 """
 from __future__ import annotations

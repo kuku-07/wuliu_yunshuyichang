@@ -1,4 +1,4 @@
-r"""docs/02 与 docs/05 缺口的验收测试。"""
+r"""历史需求缺口（快照/路由/交接/停止建议/熔断/角色）的验收测试。"""
 from __future__ import annotations
 
 import json

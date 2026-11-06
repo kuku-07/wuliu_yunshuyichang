@@ -10,12 +10,10 @@
 
 | 文档 | 内容 | 状态 |
 | --- | --- | --- |
-| [docs/01-需求评审十问.md](docs/01-需求评审十问.md) | 十个关键问题、不同答案的架构差异、本项目答案与待验证项 | v0.1 |
-| [docs/02-一页纸需求清单.md](docs/02-一页纸需求清单.md) | 目标、范围、角色、流程、边界、红线、验收 | v0.1 |
-| [docs/03-架构选型方案.md](docs/03-架构选型方案.md) | 四层架构、目录结构、数据库设计、第一周最小验证 | v0.1 |
-| [docs/04-聊天接口设计.md](docs/04-聊天接口设计.md) | SSE 接口、错误码、会话存储、前端状态机 | v0.1 |
-| [docs/05-管理后台设计.md](docs/05-管理后台设计.md) | 角色权限矩阵、8 个页面、接口清单、受控变更 | v0.1 |
-| [docs/discovery-report.md](docs/discovery-report.md) | 原始业务发现报告说明（原报告未随仓库提供，编号 f00–f55 仍被正文引用） | 说明 |
+| [docs/discovery-report.md](docs/discovery-report.md) | 原始业务发现报告说明（原报告未随仓库提供） | 说明 |
+
+> 需求分析方案、典型事件资料、案例包与访谈记录属于本地课程资料，不随仓库分发；
+> 仓库只保留可运行的代码与通用说明。
 
 ## 阶段 1 原型（可运行，零依赖）
 
@@ -37,7 +35,7 @@ python prototype/phase1_cli.py                # 交互问答
 | [admin_app/services/chat_service.py](admin_app/services/chat_service.py) | 会话、落库、SSE 事件编排（红线 → 检索 → 生成 → 校验） |
 | [admin_app/services/agent_core.py](admin_app/services/agent_core.py) | 复用阶段 1 的检索/闸门/护栏，数据源换成 SQLite 知识库 |
 | [admin_app/templates/chat.html](admin_app/templates/chat.html) | 单页聊天界面（打字机、引用面板、接管/复核横幅） |
-| [scripts/smoke_chat.py](scripts/smoke_chat.py) | 24 项验收测试（对照 docs/04 第 6 节） |
+| [scripts/smoke_chat.py](scripts/smoke_chat.py) | 35 项聊天、SSE 契约与员工门户测试 |
 | [scripts/smoke_shipments.py](scripts/smoke_shipments.py) | 11 项运单登记测试 |
 | [scripts/smoke_lanes.py](scripts/smoke_lanes.py) | 12 项干线管理测试 |
 | [scripts/smoke_mainline.py](scripts/smoke_mainline.py) | 18 项主线 + 契约测试 |
@@ -53,8 +51,8 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
 
 要点：
 
-- 事件协议与错误码遵循 [docs/04-聊天接口设计.md](docs/04-聊天接口设计.md)；
-  鉴权改用后台已有的 Cookie 会话，不再单独引入 Bearer Token。
+- 事件协议与错误码按项目内约定的聊天接口契约实现；
+  鉴权沿用后台已有的 Cookie 会话，不单独引入 Bearer Token。
 - 检索的是**已发布**的规则切片（`kb_chunks.is_active=1`），后台改规则后对话立刻生效。
 - 提示词取后台「提示词模板」的**已发布版本**，不是硬编码常量。
 - 红线在调用模型之前拦截：命中时 0 次模型调用、0 条 `delta`，只发 `takeover`。
@@ -102,7 +100,7 @@ $env:PYTHONPATH="D:\Lib\site-packages;$PWD"; python scripts\smoke_chat.py
   → 证据包（运单 + 子单 + 轨迹 + 异常 + 数据时间）→ 闸门 → 草稿（带引用）
   → 人工审核（通过/退回/转人工）→ 审计可重建。
 - 赔付、危险品等红线在生成草稿前拦截，直接转人工，不产出草稿。
-- 指标按 docs/02 §8 口径：到货与回执分开算，越权拦截单列。
+- 指标口径：到货与回执分开算，越权拦截单列。
 - 消息与审计日志保留 90 天，到期整批清理。
 - **异常受理与升级**：受理后开始计时，首次响应 ≤30 分钟、处置 ≤2 小时，
   逾期自动升级并留原因；支持指派处理人。

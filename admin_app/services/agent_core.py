@@ -1,6 +1,6 @@
 """阶段 2 适配层：把阶段 1 原型的核心模块接到 SQLite 知识库上。
 
-设计约束（来自 docs/04 第 7 节「复用阶段 1 的模块」）：
+设计约束（来自 复用阶段 1 模块的约束）：
 
 - 检索（HybridRetriever）、闸门（redline_gate）、提示词拼装（build_context_block）、
   护栏自检（check_output）、LLM 抽象（LLMClient）全部**直接复用**，

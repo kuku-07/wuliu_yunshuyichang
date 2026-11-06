@@ -172,7 +172,7 @@ def render_context(blocks: list[dict]) -> str:
 
 
 def stop_advice(ev: dict) -> tuple[str, str] | None:
-    """按 docs/02 §7 停止自动建议：GPS 弱网、客户改地址、回执延迟。"""
+    """按 停止自动建议口径 停止自动建议：GPS 弱网、客户改地址、回执延迟。"""
     shipment = ev["shipment"]
     events = ev.get("events") or []
 
@@ -328,7 +328,7 @@ REVIEW_ACTIONS = {
     "takeover": "taken_over",
 }
 
-# 修正原因：可归类才谈得上「人工修正率」（docs/03 §4.2 第 4 条）
+# 修正原因：可归类才谈得上「人工修正率」（验收口径 第 4 条）
 REVIEW_REASONS = {
     "EVIDENCE_GAP": "证据不足",
     "WRONG_RULE": "口径/规则错误",

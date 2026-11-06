@@ -1,4 +1,4 @@
-r"""阶段 2 对话入口冒烟测试（对应 docs/04 第 6 节验收口径）。
+r"""阶段 2 对话入口冒烟测试（聊天接口验收口径）。
 
 运行：
     $env:PYTHONPATH="D:\Lib\site-packages;D:\wuliu_yunshuyichang"

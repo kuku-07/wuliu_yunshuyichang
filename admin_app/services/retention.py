@@ -1,6 +1,6 @@
 """90 天留存：按天删掉过期的消息与审计日志。
 
-docs/02 §7 要求「append-only；留存 90 天」。append-only 指的是不改不删单条，
+停止自动建议口径 要求「append-only；留存 90 天」。append-only 指的是不改不删单条，
 到期整批清理是合规动作，因此单独成一个受控任务，并记录清理本身。
 """
 from __future__ import annotations
